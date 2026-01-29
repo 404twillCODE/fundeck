@@ -5,12 +5,20 @@ import { motion, useReducedMotion } from "framer-motion";
 import Container from "@/components/Container";
 import GameCard from "@/components/GameCard";
 import GradientText from "@/components/GradientText";
-import { games } from "@/data/games";
+import { games, type GameCategory } from "@/data/games";
 
 const headline = "Pick a game. Jump in. Have fun.";
 
 export default function Home() {
   const prefersReducedMotion = useReducedMotion();
+
+  const categoryOrder: GameCategory[] = ["Casino", "Party", "Social", "Debate"];
+  const gamesByCategory = categoryOrder
+    .map((category) => ({
+      category,
+      games: games.filter((game) => game.category === category),
+    }))
+    .filter((group) => group.games.length > 0);
 
   return (
     <main className="flex-1">
@@ -81,32 +89,41 @@ export default function Home() {
 
       <section className="pb-24">
         <Container>
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.2 }}
-            variants={{
-              hidden: { opacity: 0 },
-              visible: {
-                opacity: 1,
-                transition: { staggerChildren: 0.08 },
-              },
-            }}
-            className="grid gap-6 md:grid-cols-2 xl:grid-cols-3"
-          >
-            {games.map((game) => (
-              <motion.div
-                key={game.slug}
-                variants={{
-                  hidden: { opacity: 0, y: 12 },
-                  visible: { opacity: 1, y: 0 },
-                }}
-                transition={{ type: "spring", stiffness: 140, damping: 16 }}
-              >
-                <GameCard game={game} />
-              </motion.div>
+          <div className="space-y-12">
+            {gamesByCategory.map(({ category, games: categoryGames }) => (
+              <div key={category} className="space-y-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">
+                  {category}
+                </h2>
+                <motion.div
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, amount: 0.2 }}
+                  variants={{
+                    hidden: { opacity: 0 },
+                    visible: {
+                      opacity: 1,
+                      transition: { staggerChildren: 0.08 },
+                    },
+                  }}
+                  className="grid gap-6 md:grid-cols-2 xl:grid-cols-3"
+                >
+                  {categoryGames.map((game) => (
+                    <motion.div
+                      key={game.slug}
+                      variants={{
+                        hidden: { opacity: 0, y: 12 },
+                        visible: { opacity: 1, y: 0 },
+                      }}
+                      transition={{ type: "spring", stiffness: 140, damping: 16 }}
+                    >
+                      <GameCard game={game} />
+                    </motion.div>
+                  ))}
+                </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
         </Container>
       </section>
     </main>
