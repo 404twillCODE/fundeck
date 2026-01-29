@@ -10,6 +10,10 @@ type GamePageProps = {
   params: { slug: string };
 };
 
+export async function generateStaticParams() {
+  return games.map((game) => ({ slug: game.slug }));
+}
+
 export default function GamePage({ params }: GamePageProps) {
   const game = games.find((item) => item.slug === params.slug);
   const title = game?.name ?? "Unknown Game";
