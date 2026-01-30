@@ -756,8 +756,10 @@ export default function GameRoom() {
       !activePlayer.id.includes("-split");
 
     if (gameState === "betting") {
+      const currentBalance = currentPlayer?.balance ?? 0;
+      const currentBet = currentPlayer?.bet ?? 0;
       if (
-        (currentPlayer?.balance <= 0 && currentPlayer?.bet === 0) ||
+        (currentBalance <= 0 && currentBet === 0) ||
         currentPlayer?.status === "spectating"
       ) {
         return (

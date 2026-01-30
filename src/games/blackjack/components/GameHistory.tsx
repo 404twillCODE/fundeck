@@ -312,15 +312,36 @@ import type { Card } from "@/games/blackjack/types";
        <HistoryHeader>Game History</HistoryHeader>
 
        <HistoryList>
-         {gameHistory && gameHistory.length > 0 ? (
-           gameHistory.map((round, index) => (
-             <HistoryItem key={index}>
-               <RoundHeader>
-                 <div>Round {round.roundNumber || gameHistory.length - index}</div>
-                 <div>{formatTime(round.timestamp || Date.now())}</div>
-               </RoundHeader>
+        {gameHistory && gameHistory.length > 0 ? (
+          gameHistory.map((round, index) => {
+            const roundData = round as {
+              roundNumber?: number;
+              timestamp?: number;
+              allPlayersLost?: boolean;
+              dealer?: { cards?: Card[]; score?: number };
+              results?: Array<{
+                username: string;
+                outcome: string;
+                amountChange: number;
+                score: number;
+                cards: Card[];
+              }>;
+            };
+            const roundNumber =
+              typeof roundData.roundNumber === "number"
+                ? roundData.roundNumber
+                : gameHistory.length - index;
+            const roundTimestamp =
+              typeof roundData.timestamp === "number" ? roundData.timestamp : Date.now();
 
-               {round.allPlayersLost ? (
+            return (
+              <HistoryItem key={index}>
+                <RoundHeader>
+                  <div>Round {roundNumber}</div>
+                  <div>{formatTime(roundTimestamp)}</div>
+                </RoundHeader>
+
+               {roundData.allPlayersLost ? (
                  <AllLostMessage>
                    <div style={{ fontSize: "32px", marginBottom: "10px" }}>💸</div>
                    <AllLostText>All Players Lost</AllLostText>
@@ -328,14 +349,16 @@ import type { Card } from "@/games/blackjack/types";
                  </AllLostMessage>
                ) : (
                  <ResultGrid>
-                   {round.dealer && round.dealer.cards && round.dealer.cards.length > 0 && (
+                   {roundData.dealer?.cards && roundData.dealer.cards.length > 0 && (
                      <DealerSection>
                        <DealerHeader>
                          <DealerLabel>Dealer</DealerLabel>
-                         {round.dealer.score > 0 && <DealerScore>Score: {round.dealer.score}</DealerScore>}
+                         {roundData.dealer.score ? (
+                           <DealerScore>Score: {roundData.dealer.score}</DealerScore>
+                         ) : null}
                        </DealerHeader>
                        <CardsContainer>
-                         {round.dealer.cards.map((card: Card, idx: number) => (
+                        {roundData.dealer.cards.map((card: Card, idx: number) => (
                            <HistoryCard key={idx} $color={getCardColor(card.suit)}>
                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
                                <CardValueSmall>{getCardValue(card.value)}</CardValueSmall>
@@ -352,8 +375,8 @@ import type { Card } from "@/games/blackjack/types";
                      </DealerSection>
                    )}
 
-                   {round.results &&
-                     round.results
+                   {roundData.results &&
+                    roundData.results
                        .filter((result: { outcome: string; amountChange: number }) => {
                          if (result.outcome === "spectating") {
                            return false;
@@ -417,8 +440,9 @@ import type { Card } from "@/games/blackjack/types";
                        ))}
                  </ResultGrid>
                )}
-             </HistoryItem>
-           ))
+              </HistoryItem>
+            );
+          })
          ) : (
            <EmptyState>No game history yet.</EmptyState>
          )}
