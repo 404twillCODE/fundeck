@@ -1,24 +1,81 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const { v4: uuidv4 } = require('uuid');
 const { supabase } = require('./supabase');
 
+// Parse allowed origins: ALLOWED_ORIGINS="http://localhost:3000,https://yourname.github.io/fundeck"
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: ALLOWED_ORIGINS }));
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: ALLOWED_ORIGINS,
+    methods: ['GET', 'POST'],
+  },
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5250;
 const ROOM_TABLE = process.env.SUPABASE_ROOMS_TABLE || 'game_rooms';
 const ROOM_STALE_MS = parseInt(process.env.SUPABASE_ROOM_STALE_MS || '21600000', 10); // 6h
+
+// In-memory rate limiting (no DB)
+const MAX_CONNECTIONS_PER_IP = parseInt(process.env.RATE_LIMIT_CONNECTIONS_PER_IP || '5', 10);
+const MAX_EVENTS_PER_SOCKET_PER_MINUTE = parseInt(process.env.RATE_LIMIT_EVENTS_PER_MINUTE || '120', 10);
+const connectionsByIp = {};
+const socketEventCounts = new Map(); // socketId -> { count, windowStart }
+
+function getClientIp(socket) {
+  return socket.handshake.address || socket.conn?.remoteAddress || 'unknown';
+}
+
+function checkConnectionLimit(ip) {
+  const n = connectionsByIp[ip] || 0;
+  if (n >= MAX_CONNECTIONS_PER_IP) {
+    return false;
+  }
+  connectionsByIp[ip] = n + 1;
+  return true;
+}
+
+function decrementConnectionCount(ip) {
+  if (connectionsByIp[ip] !== undefined) {
+    connectionsByIp[ip] = Math.max(0, connectionsByIp[ip] - 1);
+    if (connectionsByIp[ip] === 0) delete connectionsByIp[ip];
+  }
+}
+
+function checkEventRate(socketId) {
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  let entry = socketEventCounts.get(socketId);
+  if (!entry) {
+    socketEventCounts.set(socketId, { count: 1, windowStart: now });
+    return true;
+  }
+  if (now - entry.windowStart > windowMs) {
+    entry.count = 1;
+    entry.windowStart = now;
+    return true;
+  }
+  entry.count++;
+  if (entry.count > MAX_EVENTS_PER_SOCKET_PER_MINUTE) {
+    return false;
+  }
+  return true;
+}
+
+function clearSocketEventCount(socketId) {
+  socketEventCounts.delete(socketId);
+}
 
 // Game state
 const rooms = {};
@@ -165,8 +222,25 @@ const isBlackjack = (cards) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
-  
+  const clientIp = getClientIp(socket);
+  if (!checkConnectionLimit(clientIp)) {
+    console.warn(`[Rate limit] Rejected connection from ${clientIp} (max ${MAX_CONNECTIONS_PER_IP} per IP)`);
+    socket.emit('error', { message: 'Too many connections from your network.' });
+    socket.disconnect(true);
+    return;
+  }
+  console.log(`User connected: ${socket.id} (${clientIp})`);
+
+  function requireEventRateLimit() {
+    if (!checkEventRate(socket.id)) {
+      console.warn(`[Rate limit] Event limit exceeded for socket ${socket.id}`);
+      socket.emit('error', { message: 'Too many actions. Slow down.' });
+      socket.disconnect(true);
+      return true;
+    }
+    return false;
+  }
+
   // Test event to verify connection
   socket.on('ping', (data) => {
     console.log(`Ping received from ${socket.id}:`, data);
@@ -190,6 +264,7 @@ io.on('connection', (socket) => {
   
   // Vote to continue after all players lose
   socket.on('vote_reset', ({ roomId, vote }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId] || !rooms[roomId].players.find(p => p.id === socket.id)) {
       socket.emit('error', { message: 'Room not found or you are not in this room' });
       return;
@@ -233,6 +308,7 @@ io.on('connection', (socket) => {
   
   // Create a new room
   socket.on('create_room', ({ username, balance }) => {
+    if (requireEventRateLimit()) return;
     try {
       if (!username) {
         socket.emit('error', { message: 'Username is required' });
@@ -279,6 +355,7 @@ io.on('connection', (socket) => {
   
   // Join an existing room
   socket.on('join_room', ({ roomId, username, balance }) => {
+    if (requireEventRateLimit()) return;
     try {
       if (!roomId || !username) {
         socket.emit('error', { message: 'Room ID and username are required' });
@@ -334,6 +411,7 @@ io.on('connection', (socket) => {
   
   // Start the game
   socket.on('start_game', ({ roomId }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId]) return;
     
     // Check if player is the host (first player)
@@ -366,6 +444,7 @@ io.on('connection', (socket) => {
   
   // Place a bet
   socket.on('place_bet', ({ roomId, amount }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId] || rooms[roomId].gameState !== 'betting') return;
     
     // Find the player
@@ -436,6 +515,7 @@ io.on('connection', (socket) => {
   
   // Hit (draw a card)
   socket.on('hit', ({ roomId, handId }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') return;
     
     // Determine which hand ID to use
@@ -499,6 +579,7 @@ io.on('connection', (socket) => {
   
   // Stand (end turn)
   socket.on('stand', ({ roomId, handId }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') return;
     
     // Determine which hand ID to use
@@ -559,6 +640,7 @@ io.on('connection', (socket) => {
   
   // Double down
   socket.on('double_down', ({ roomId, handId }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') return;
     
     // Determine which hand ID to use
@@ -643,6 +725,7 @@ io.on('connection', (socket) => {
   
   // Split
   socket.on('split', ({ roomId }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') return;
     
     // Check if it's player's turn
@@ -764,6 +847,7 @@ io.on('connection', (socket) => {
   
   // Surrender
   socket.on('surrender', ({ roomId, handId }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId] || rooms[roomId].gameState !== 'playing') return;
     
     // Determine which hand ID to use
@@ -810,6 +894,7 @@ io.on('connection', (socket) => {
   
   // Start a new round
   socket.on('new_round', ({ roomId }) => {
+    if (requireEventRateLimit()) return;
     console.log(`\n📥 Received new_round event for room ${roomId} from socket ${socket.id}`);
     console.log(`   Current game state: ${rooms[roomId]?.gameState || 'ROOM NOT FOUND'}`);
     
@@ -1022,6 +1107,7 @@ io.on('connection', (socket) => {
   
   // Send chat message
   socket.on('send_message', ({ roomId, message, sender }) => {
+    if (requireEventRateLimit()) return;
     if (!rooms[roomId]) return;
     
     // Create message object
@@ -1038,6 +1124,7 @@ io.on('connection', (socket) => {
   
   // Restart game - reset all players' balances to 1000
   socket.on('restart_game', (data) => {
+    if (requireEventRateLimit()) return;
     console.log(`\n=== RESTART GAME REQUEST ===`);
     console.log(`Raw data received:`, data);
     console.log(`RoomId: ${data?.roomId}`);
@@ -1123,6 +1210,7 @@ io.on('connection', (socket) => {
   
   // Kick a player from the room
   socket.on('kick_player', ({ roomId, playerId }) => {
+    if (requireEventRateLimit()) return;
     console.log(`\n=== KICK REQUEST ===`);
     console.log(`RoomId: ${roomId}`);
     console.log(`PlayerId to kick: ${playerId}`);
@@ -1191,6 +1279,8 @@ io.on('connection', (socket) => {
   
   // Handle disconnection
   socket.on('disconnect', () => {
+    decrementConnectionCount(clientIp);
+    clearSocketEventCount(socket.id);
     console.log(`User disconnected: ${socket.id}`);
     
     // Find all rooms the user is in
@@ -2178,8 +2268,14 @@ app.get('/leaderboard', async (req, res) => {
 });
 
 // Health check endpoint for Render
+const pkg = require('../package.json');
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: Date.now() });
+  res.status(200).json({
+    status: 'ok',
+    timestamp: Date.now(),
+    version: pkg.version || '1.0.0',
+    uptimeSeconds: Math.floor(process.uptime()),
+  });
 });
 
 // Load leaderboard from Supabase on server start
@@ -2225,7 +2321,7 @@ server.on('error', (error) => {
       process.exit(1);
       break;
     case 'EADDRINUSE':
-      console.error(`❌ ${bind} is already in use`);
+      console.error(`❌ ${bind} is already in use. Set PORT to another port (e.g. PORT=5251 npm run dev).`);
       process.exit(1);
       break;
     default:
@@ -2233,8 +2329,8 @@ server.on('error', (error) => {
   }
 });
 
-// Start server
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`✅ Health check available at http://0.0.0.0:${PORT}/health`);
+// Start server (localhost only; use Playit.gg or similar to expose publicly)
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`✅ Server running on http://127.0.0.1:${PORT}`);
+  console.log(`✅ Health check: http://127.0.0.1:${PORT}/health`);
 });

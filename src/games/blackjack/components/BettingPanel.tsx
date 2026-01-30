@@ -11,29 +11,25 @@ const BettingContainer = styled.div`
   align-items: center;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 2rem;
+  padding: 1rem 1.5rem;
   border-radius: 16px;
-  position: absolute;
   z-index: 100;
   box-shadow: 0 10px 40px rgba(5, 6, 10, 0.6);
   backdrop-filter: blur(12px);
   width: clamp(280px, 42vw, 380px);
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: clamp(60px, 12vh, 100px);
+  max-width: 100%;
 
   @media (max-width: 640px) {
     width: min(92vw, 340px);
-    padding: 1.25rem;
-    bottom: 70px;
+    padding: 0.75rem 1rem;
   }
 `;
 
 const Title = styled.h3`
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
   color: #38bdf8;
   text-align: center;
-  font-size: clamp(1rem, 2vw, 1.2rem);
+  font-size: clamp(0.9rem, 1.8vw, 1.1rem);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.2em;
@@ -42,8 +38,8 @@ const Title = styled.h3`
 const CustomBetContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 1.5rem;
+  gap: 8px;
+  margin-bottom: 0.75rem;
   width: min(90%, 320px);
 `;
 
@@ -104,8 +100,8 @@ const ApplyCustomBetButton = styled(Button)`
 const ChipsContainer = styled.div`
   display: flex;
   justify-content: center;
-  gap: 12px;
-  margin-bottom: 1.5rem;
+  gap: 8px;
+  margin-bottom: 0.75rem;
   flex-wrap: wrap;
 `;
 
@@ -180,8 +176,8 @@ const GoldChip = styled(Chip)`
 `;
 
 const BetDisplay = styled.div`
-  font-size: clamp(1.2rem, 2.4vw, 1.6rem);
-  margin-bottom: 1.5rem;
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  margin-bottom: 0.75rem;
   font-weight: 700;
   color: #38bdf8;
   text-transform: uppercase;

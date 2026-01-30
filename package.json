@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:server": "cd blackjack-server && npm run dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.2",
@@ -19,6 +21,7 @@
     "styled-components": "^6.3.8"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

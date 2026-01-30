@@ -9,7 +9,6 @@ import React, {
 } from "react";
 import { io, type Socket } from "socket.io-client";
 
-import { SOCKET_SERVER } from "@/games/blackjack/config";
 import { useAuth } from "@/games/blackjack/contexts/AuthContext";
 import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types";
 
@@ -58,6 +57,8 @@ import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types
    voteStatus: VoteStatus | null;
    hasVoted: boolean;
    voteReset: (vote: string) => void;
+  /** True when socket disconnected and is attempting to reconnect (show toast). */
+  reconnecting: boolean;
  };
 
  const GameContext = createContext<GameContextValue | null>(null);
@@ -70,10 +71,17 @@ import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types
    return value;
  };
 
- export const GameProvider = ({ children }: { children: React.ReactNode }) => {
+ type GameProviderProps = {
+  children: React.ReactNode;
+  serverUrl: string;
+  onReconnectFailed?: () => void;
+};
+
+export const GameProvider = ({ children, serverUrl, onReconnectFailed }: GameProviderProps) => {
    const { username: authUsername, balance: authBalance, setBalance: updateAuthBalance } = useAuth();
    const [socket, setSocket] = useState<Socket | null>(null);
    const [connected, setConnected] = useState(false);
+   const [reconnecting, setReconnecting] = useState(false);
    const [username, setUsername] = useState(authUsername || "");
    const [balance, setBalance] = useState(authBalance || 1000);
    const [roomId, setRoomId] = useState<string | null>(null);
@@ -112,7 +120,8 @@ import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types
    }, [connected, roomId, socket]);
 
    useEffect(() => {
-     const newSocket = io(SOCKET_SERVER, {
+     if (!serverUrl) return;
+     const newSocket = io(serverUrl, {
        transports: ["polling", "websocket"],
        reconnection: true,
        reconnectionDelay: 2000,
@@ -127,6 +136,7 @@ import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types
 
      newSocket.on("connect", () => {
        setConnected(true);
+       setReconnecting(false);
        setError(null);
      });
 
@@ -134,23 +144,27 @@ import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types
        setConnected(false);
        const errorMsg = socketError.message || "Connection refused";
        setError(
-         `Failed to connect to server: ${errorMsg}. The server may be sleeping. Try visiting https://multiplayer-blackjack-7df9.onrender.com to wake it up, then refresh this page.`,
+         `Could not reach the blackjack server: ${errorMsg}. The host PC may be offline or the Playit tunnel may be down. Check the server URL and try again.`,
        );
      });
 
      newSocket.on("reconnect", () => {
        setConnected(true);
+       setReconnecting(false);
        setError(null);
      });
 
      newSocket.on("reconnect_failed", () => {
-       setError("Unable to connect to server. Please check if the server is running and refresh the page.");
+       setReconnecting(false);
+       setError("Reconnection failed. Use Retry or refresh the page.");
+       onReconnectFailed?.();
      });
 
      newSocket.on("disconnect", (reason) => {
        setConnected(false);
+       setReconnecting(true);
        if (reason === "io server disconnect") {
-         setError("Disconnected by server. Please refresh the page.");
+         setError("Disconnected by server. Attempting to reconnect…");
        }
      });
 
@@ -162,7 +176,7 @@ import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types
      return () => {
        newSocket.disconnect();
      };
-   }, []);
+   }, [serverUrl, onReconnectFailed]);
 
    useEffect(() => {
      if (!socket) return;
@@ -791,6 +805,7 @@ import type { Dealer, GameState, Message, Player } from "@/games/blackjack/types
        socket.emit("vote_reset", { roomId, vote });
        setHasVoted(true);
      },
+     reconnecting,
    };
 
    return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

@@ -16,8 +16,9 @@ const GameRoomContainer = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: calc(100vh - 64px);
+  min-height: 0;
   height: calc(100vh - 64px);
+  max-height: calc(100vh - 64px);
   background: rgba(5, 6, 10, 0.4);
   color: white;
   overflow: hidden;
@@ -27,8 +28,8 @@ const GameRoomContainer = styled.div`
   box-shadow: 0 24px 60px rgba(5, 6, 10, 0.5);
 
   @media (max-width: 1024px) {
-    min-height: calc(100vh - 64px);
-    height: auto;
+    height: calc(100vh - 64px);
+    max-height: calc(100vh - 64px);
   }
 
   @media (max-width: 640px) {
@@ -47,6 +48,8 @@ const GameHeader = styled.header`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
   padding: 16px 28px;
   background: rgba(5, 6, 10, 0.7);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -57,7 +60,6 @@ const GameHeader = styled.header`
   @media (max-width: 768px) {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
     padding: 16px 20px;
   }
 `;
@@ -143,10 +145,10 @@ const GameContent = styled.div`
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 
   @media (max-width: 1024px) {
     flex-direction: column;
-    min-height: 0;
   }
 `;
 
@@ -155,40 +157,69 @@ const GameTable = styled.div`
   display: flex;
   flex-direction: column;
   position: relative;
-  padding: 20px;
+  min-height: 0;
   overflow: hidden;
+`;
+
+const TableScrollArea = styled.div`
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px 12px;
+  position: relative;
 
   @media (max-width: 768px) {
-    padding: 14px;
+    padding: 12px 14px 10px;
   }
 
   @media (max-width: 480px) {
-    padding: 12px;
+    padding: 10px 12px 8px;
   }
 `;
 
 const DealerSection = styled.div`
-  height: 30%;
+  flex-shrink: 0;
+  min-height: 80px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 `;
 
 const PlayersSection = styled.div`
-  height: 50%;
+  flex: 1 1 auto;
+  min-height: 120px;
   display: flex;
   justify-content: space-around;
   align-items: center;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+`;
+
+const BettingInTableSection = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 20px 20px;
+  margin-top: 8px;
 `;
 
 const ControlsSection = styled.div`
-  height: 20%;
+  flex-shrink: 0;
   display: flex;
   justify-content: center;
-  align-items: flex-end;
-  padding-bottom: 20px;
+  align-items: center;
+  padding: 12px 20px 16px;
+  min-height: 60px;
+  background: rgba(5, 6, 10, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  @media (max-width: 768px) {
+    padding: 10px 14px 12px;
+  }
 `;
 
 const SidebarContainer = styled.div`
@@ -408,10 +439,11 @@ const RoundEndedMessage = styled.div`
 const HeaderControls = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 
-  @media (max-width: 1024px) {
-    flex-wrap: wrap;
+  @media (max-width: 768px) {
     justify-content: flex-start;
   }
 `;
@@ -474,16 +506,17 @@ const SpectatorItem = styled.div`
 
 const BettingStatusContainer = styled.div`
   position: absolute;
-  bottom: 600px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  background: rgba(5, 6, 10, 0.9);
+  transform: translate(-50%, -50%);
+  background: rgba(5, 6, 10, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   padding: 20px 30px;
   z-index: 110;
   text-align: center;
-  min-width: 300px;
+  min-width: 280px;
+  max-width: 90%;
   box-shadow: 0 10px 40px rgba(5, 6, 10, 0.7);
   backdrop-filter: blur(10px);
 `;
@@ -692,6 +725,7 @@ export default function GameRoom() {
       withBets: playersWithBets.length,
       withoutBets: playersWithoutBets.length,
       players: activePlayers.map((player) => ({
+        id: player.id,
         username: player.username,
         hasBet: player.bet > 0,
         bet: player.bet || 0,
@@ -756,28 +790,7 @@ export default function GameRoom() {
       !activePlayer.id.includes("-split");
 
     if (gameState === "betting") {
-      const currentBalance = currentPlayer?.balance ?? 0;
-      const currentBet = currentPlayer?.bet ?? 0;
-      if (
-        (currentBalance <= 0 && currentBet === 0) ||
-        currentPlayer?.status === "spectating"
-      ) {
-        return (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "15px",
-              backgroundColor: "rgba(5,6,10,0.7)",
-              borderRadius: "10px",
-              color: "#a78bfa",
-            }}
-          >
-            You are out of funds and will spectate this round
-          </div>
-        );
-      }
-
-      return <BettingPanel playerBalance={currentPlayer?.balance || 0} />;
+      return null;
     }
 
     if (gameState === "playing" && isPlayerTurn() && !hasBlackjack) {
@@ -817,7 +830,7 @@ export default function GameRoom() {
             <span role="img" aria-label="hint">
               💡
             </span>
-            {hintsEnabled ? "Strategy Help: On" : "Strategy Help: Off"}
+            {hintsEnabled ? "Hints: On" : "Hints: Off"}
           </ToggleButton>
 
           <LeaveButton onClick={handleLeaveRoom}>Leave Table</LeaveButton>
@@ -826,111 +839,133 @@ export default function GameRoom() {
 
       <GameContent>
         <GameTable>
-          <DealerSection>
-            {(gameState === "playing" || gameState === "ended" || isPickingUpCards) && (
-              <DealerArea
-                dealer={dealer}
-                gameState={gameState}
-                currentTurn={currentTurn}
-                isPickingUpCards={isPickingUpCards}
-                players={players}
-              />
-            )}
-          </DealerSection>
-
-          <PlayersSection>{renderPlayerSeats()}</PlayersSection>
-
-          {isPickingUpCards && (
-            <RoundEndedMessage>
-              <h2>🎴 Round Ended</h2>
-              <p>Dealer is collecting cards...</p>
-            </RoundEndedMessage>
-          )}
-
-          {showVotePrompt && (
-            <VotePromptContainer>
-              <VoteTitle>💸 All Players Lost!</VoteTitle>
-              <VoteMessage>
-                Everyone ran out of money! Click continue to reset the game and start fresh.
-              </VoteMessage>
-              <VoteButtons>
-                <VoteButton $selected={hasVoted} onClick={() => voteReset("continue")} disabled={hasVoted}>
-                  ✅ Continue
-                </VoteButton>
-              </VoteButtons>
-              {voteStatus && (
-                <VoteStatus>
-                  Votes: {voteStatus.votesReceived}/{voteStatus.totalPlayers}{" "}
-                  {voteStatus.votesReceived < voteStatus.totalPlayers && " - Waiting for other players..."}
-                </VoteStatus>
+          <TableScrollArea>
+            <DealerSection>
+              {(gameState === "playing" || gameState === "ended" || isPickingUpCards) && (
+                <DealerArea
+                  dealer={dealer}
+                  gameState={gameState}
+                  currentTurn={currentTurn}
+                  isPickingUpCards={isPickingUpCards}
+                  players={players}
+                />
               )}
-            </VotePromptContainer>
-          )}
+            </DealerSection>
+
+            <PlayersSection>{renderPlayerSeats()}</PlayersSection>
+
+            {gameState === "betting" && (
+              <BettingInTableSection>
+                {(currentPlayer?.balance ?? 0) <= 0 && (currentPlayer?.bet ?? 0) === 0 ? (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: "15px",
+                      backgroundColor: "rgba(5,6,10,0.7)",
+                      borderRadius: "10px",
+                      color: "#a78bfa",
+                    }}
+                  >
+                    You are out of funds and will spectate this round
+                  </div>
+                ) : currentPlayer?.status !== "spectating" ? (
+                  <BettingPanel playerBalance={currentPlayer?.balance || 0} />
+                ) : null}
+              </BettingInTableSection>
+            )}
+
+            {isPickingUpCards && (
+              <RoundEndedMessage>
+                <h2>🎴 Round Ended</h2>
+                <p>Dealer is collecting cards...</p>
+              </RoundEndedMessage>
+            )}
+
+            {showVotePrompt && (
+              <VotePromptContainer>
+                <VoteTitle>💸 All Players Lost!</VoteTitle>
+                <VoteMessage>
+                  Everyone ran out of money! Click continue to reset the game and start fresh.
+                </VoteMessage>
+                <VoteButtons>
+                  <VoteButton $selected={hasVoted} onClick={() => voteReset("continue")} disabled={hasVoted}>
+                    ✅ Continue
+                  </VoteButton>
+                </VoteButtons>
+                {voteStatus && (
+                  <VoteStatus>
+                    Votes: {voteStatus.votesReceived}/{voteStatus.totalPlayers}{" "}
+                    {voteStatus.votesReceived < voteStatus.totalPlayers && " - Waiting for other players..."}
+                  </VoteStatus>
+                )}
+              </VotePromptContainer>
+            )}
+
+            {gameState === "waiting" && (
+              <>
+                {isHost && players.length >= 2 ? (
+                  <StartGameButton onClick={startGame}>Start Game</StartGameButton>
+                ) : (
+                  <WaitingMessage>
+                    <h2>Waiting for players...</h2>
+                    <p>
+                      {isHost
+                        ? "You need at least one more player to start the game."
+                        : "Waiting for the host to start the game."}
+                    </p>
+                  </WaitingMessage>
+                )}
+              </>
+            )}
+
+            {getSpectators().length > 0 && (
+              <SpectatorsContainer>
+                <SpectatorsTitle>
+                  <span role="img" aria-label="spectators">
+                    👁️
+                  </span>{" "}
+                  Spectators
+                </SpectatorsTitle>
+                <SpectatorsList>
+                  {getSpectators().map((spectator: Player) => (
+                    <SpectatorItem key={spectator.id}>{spectator.username}</SpectatorItem>
+                  ))}
+                </SpectatorsList>
+              </SpectatorsContainer>
+            )}
+
+            {gameState === "betting" &&
+              (() => {
+                const bettingStatus = getBettingStatus();
+                if (!bettingStatus || bettingStatus.total === 0) return null;
+
+                return (
+                  <BettingStatusContainer key={`betting-status-${bettingStatus.withBets}-${bettingStatus.total}`}>
+                    <BettingStatusTitle>
+                      <span role="img" aria-label="betting">
+                        💰
+                      </span>
+                      Betting Phase
+                    </BettingStatusTitle>
+                    <div style={{ color: "rgba(255,255,255,0.7)", marginBottom: "10px" }}>
+                      {bettingStatus.withBets} of {bettingStatus.total} players have placed bets
+                    </div>
+                    <BettingStatusList>
+                      {bettingStatus.players.map((player: { id: string; username: string; hasBet: boolean; bet: number }) => (
+                        <BettingStatusItem key={player.id}>
+                          <span>{player.username}</span>
+                          <BettingStatusBadge $hasBet={player.hasBet}>
+                            {player.hasBet ? `✓ Bet: $${player.bet}` : "Waiting..."}
+                          </BettingStatusBadge>
+                        </BettingStatusItem>
+                      ))}
+                    </BettingStatusList>
+                  </BettingStatusContainer>
+                );
+              })()}
+          </TableScrollArea>
 
           <ControlsSection>{renderControls()}</ControlsSection>
-
-          {gameState === "waiting" && (
-            <>
-              {isHost && players.length >= 2 ? (
-                <StartGameButton onClick={startGame}>Start Game</StartGameButton>
-              ) : (
-                <WaitingMessage>
-                  <h2>Waiting for players...</h2>
-                  <p>
-                    {isHost
-                      ? "You need at least one more player to start the game."
-                      : "Waiting for the host to start the game."}
-                  </p>
-                </WaitingMessage>
-              )}
-            </>
-          )}
-
-          {getSpectators().length > 0 && (
-            <SpectatorsContainer>
-              <SpectatorsTitle>
-                <span role="img" aria-label="spectators">
-                  👁️
-                </span>{" "}
-                Spectators
-              </SpectatorsTitle>
-              <SpectatorsList>
-                {getSpectators().map((spectator: Player) => (
-                  <SpectatorItem key={spectator.id}>{spectator.username}</SpectatorItem>
-                ))}
-              </SpectatorsList>
-            </SpectatorsContainer>
-          )}
-
-          {gameState === "betting" &&
-            (() => {
-              const bettingStatus = getBettingStatus();
-              if (!bettingStatus || bettingStatus.total === 0) return null;
-
-              return (
-                <BettingStatusContainer key={`betting-status-${bettingStatus.withBets}-${bettingStatus.total}`}>
-                  <BettingStatusTitle>
-                    <span role="img" aria-label="betting">
-                      💰
-                    </span>
-                    Betting Phase
-                  </BettingStatusTitle>
-                  <div style={{ color: "rgba(255,255,255,0.7)", marginBottom: "10px" }}>
-                    {bettingStatus.withBets} of {bettingStatus.total} players have placed bets
-                  </div>
-                  <BettingStatusList>
-                    {bettingStatus.players.map((player: { username: string; hasBet: boolean; bet: number }) => (
-                      <BettingStatusItem key={`${player.username}-${player.hasBet}-${player.bet}`}>
-                        <span>{player.username}</span>
-                        <BettingStatusBadge $hasBet={player.hasBet}>
-                          {player.hasBet ? `✓ Bet: $${player.bet}` : "Waiting..."}
-                        </BettingStatusBadge>
-                      </BettingStatusItem>
-                    ))}
-                  </BettingStatusList>
-                </BettingStatusContainer>
-              );
-            })()}
         </GameTable>
 
         <SidebarContainer>
