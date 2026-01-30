@@ -6,11 +6,14 @@ import Container from "@/components/Container";
 import GameCard from "@/components/GameCard";
 import GradientText from "@/components/GradientText";
 import { games, type GameCategory } from "@/data/games";
+import Auth from "@/games/blackjack/components/Auth";
+import { useAuth } from "@/games/blackjack/contexts/AuthContext";
 
 const headline = "Pick a game. Jump in. Have fun.";
 
 export default function Home() {
   const prefersReducedMotion = useReducedMotion();
+  const { loading, username, authEnabled } = useAuth();
 
   const categoryOrder: GameCategory[] = ["Casino", "Party", "Social", "Debate"];
   const gamesByCategory = categoryOrder
@@ -19,6 +22,30 @@ export default function Home() {
       games: games.filter((game) => game.category === category),
     }))
     .filter((group) => group.games.length > 0);
+
+  if (loading) {
+    return (
+      <main className="flex-1">
+        <section className="relative overflow-hidden py-20 sm:py-28">
+          <Container>
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-white/70">
+              Loading FunDeck...
+            </div>
+          </Container>
+        </section>
+      </main>
+    );
+  }
+
+  if (authEnabled && !username) {
+    return (
+      <main className="flex-1">
+        <section className="relative overflow-hidden py-20 sm:py-28">
+          <Auth />
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="flex-1">

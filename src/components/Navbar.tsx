@@ -11,7 +11,7 @@ import GradientText from "@/components/GradientText";
 const navLinks = [
   { label: "Games", href: "/games" },
   { label: "Leaderboards", href: "#", disabled: true },
-  { label: "Account", href: "#", disabled: true },
+  { label: "Account", href: "/account" },
 ];
 
 export default function Navbar() {
@@ -56,17 +56,11 @@ export default function Navbar() {
     setIsMenuOpen(false);
   }, [pathname]);
 
-  const underlineMotion = useMemo(
-    () => ({
-      initial: { scaleX: 0 },
-      whileHover: { scaleX: 1 },
-      transition: {
-        type: prefersReducedMotion ? "tween" : "spring",
-        stiffness: 160,
-        damping: 18,
-        duration: prefersReducedMotion ? 0 : undefined,
-      },
-    }),
+  const underlineTransition = useMemo(
+    () =>
+      prefersReducedMotion
+        ? { duration: 0 }
+        : { type: "spring" as const, stiffness: 160, damping: 18 },
     [prefersReducedMotion],
   );
 
@@ -139,7 +133,8 @@ export default function Navbar() {
                     className="absolute -bottom-2 left-0 h-[2px] w-full origin-left rounded-full bg-gradient-to-r from-cyan-400 via-purple-400 to-emerald-300"
                     initial={{ scaleX: isActive ? 1 : 0 }}
                     animate={{ scaleX: isActive ? 1 : 0 }}
-                    {...underlineMotion}
+                    whileHover={{ scaleX: 1 }}
+                    transition={underlineTransition}
                   />
                 </Link>
               );
@@ -222,7 +217,8 @@ export default function Navbar() {
                         className="absolute -bottom-2 left-0 h-[2px] w-full origin-left rounded-full bg-gradient-to-r from-cyan-400 via-purple-400 to-emerald-300"
                         initial={{ scaleX: isActive ? 1 : 0 }}
                         animate={{ scaleX: isActive ? 1 : 0 }}
-                        {...underlineMotion}
+                        whileHover={{ scaleX: 1 }}
+                        transition={underlineTransition}
                       />
                     </Link>
                   );

@@ -6,7 +6,7 @@ import Container from "@/components/Container";
 import NeonCard from "@/components/NeonCard";
 import Auth from "@/games/blackjack/components/Auth";
 import GameRoom from "@/games/blackjack/components/GameRoom";
-import { AuthProvider, useAuth } from "@/games/blackjack/contexts/AuthContext";
+import { useAuth } from "@/games/blackjack/contexts/AuthContext";
 import { GameProvider, useGame } from "@/games/blackjack/contexts/GameContext";
 import BlackjackLobby from "@/games/blackjack/BlackjackLobby";
 
@@ -26,7 +26,12 @@ function BlackjackShell() {
   }
 
   if (authEnabled && !username) {
-    return <Auth />;
+    return (
+      <Auth
+        title="Blackjack Lounge"
+        subtitle="Sign in to keep your balance, or jump in as a guest."
+      />
+    );
   }
 
   if (!roomId) {
@@ -51,10 +56,8 @@ function BlackjackShell() {
 
 export default function BlackjackApp() {
   return (
-    <AuthProvider>
-      <GameProvider>
-        <BlackjackShell />
-      </GameProvider>
-    </AuthProvider>
+    <GameProvider>
+      <BlackjackShell />
+    </GameProvider>
   );
 }

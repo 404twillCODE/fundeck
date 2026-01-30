@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import AnimatedBackground from "@/components/AnimatedBackground";
 import Navbar from "@/components/Navbar";
+import Providers from "@/app/providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,10 +37,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} min-h-screen bg-background text-text antialiased`}
       >
         <AnimatedBackground />
-        <div className="relative z-10 flex min-h-screen flex-col">
-          <Navbar />
-          {children}
-        </div>
+        <Providers>
+          <div className="relative z-10 flex min-h-screen flex-col">
+            <Navbar />
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );

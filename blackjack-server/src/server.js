@@ -17,6 +17,8 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 5000;
+const ROOM_TABLE = process.env.SUPABASE_ROOMS_TABLE || 'game_rooms';
+const ROOM_STALE_MS = parseInt(process.env.SUPABASE_ROOM_STALE_MS || '21600000', 10); // 6h
 
 // Game state
 const rooms = {};
@@ -25,6 +27,79 @@ const turnTimers = {}; // Store timers for auto-skipping players after 30 second
 const autoSkippedPlayers = {}; // Track which players have been auto-skipped to prevent duplicate messages
 const resetVotes = {}; // Track votes for game reset: { roomId: { playerId: 'continue' | 'reset' } }
 const pendingNextTurnTimers = {}; // Store pending nextPlayerTurn timeouts to prevent race conditions
+const pendingRoomWrites = new Map();
+
+const getRoomSnapshot = (roomId) => {
+  const room = rooms[roomId];
+  if (!room) return null;
+  return {
+    id: roomId,
+    state: room,
+    updated_at: new Date().toISOString()
+  };
+};
+
+const persistRoom = async (roomId) => {
+  if (!supabase) return;
+  const snapshot = getRoomSnapshot(roomId);
+  if (!snapshot) return;
+  try {
+    const { error } = await supabase.from(ROOM_TABLE).upsert(snapshot, {
+      onConflict: 'id'
+    });
+    if (error) {
+      console.error('❌ Error saving room to Supabase:', error);
+    }
+  } catch (error) {
+    console.error('❌ Error persisting room:', error);
+  }
+};
+
+const scheduleRoomPersist = (roomId, delay = 1500) => {
+  if (!supabase) return;
+  if (pendingRoomWrites.has(roomId)) return;
+  const timeout = setTimeout(async () => {
+    pendingRoomWrites.delete(roomId);
+    await persistRoom(roomId);
+  }, delay);
+  pendingRoomWrites.set(roomId, timeout);
+};
+
+const loadRoomsFromSupabase = async () => {
+  if (!supabase) return;
+  try {
+    const cutoff = new Date(Date.now() - ROOM_STALE_MS).toISOString();
+    const { data, error } = await supabase
+      .from(ROOM_TABLE)
+      .select('id,state,updated_at')
+      .gte('updated_at', cutoff);
+
+    if (error) {
+      console.error('❌ Error loading rooms from Supabase:', error);
+      return;
+    }
+
+    if (!data) return;
+    data.forEach((row) => {
+      if (row?.id && row?.state) {
+        rooms[row.id] = row.state;
+      }
+    });
+
+    console.log(`✅ Loaded ${data.length} rooms from Supabase`);
+  } catch (error) {
+    console.error('❌ Error initializing rooms:', error);
+  }
+};
+
+const deleteRoomFromSupabase = async (roomId) => {
+  if (!supabase) return;
+  try {
+    await supabase.from(ROOM_TABLE).delete().eq('id', roomId);
+  } catch (error) {
+    console.error('❌ Error deleting room from Supabase:', error);
+  }
+};
 
 // Card deck utilities
 const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
@@ -193,6 +268,7 @@ io.on('connection', (socket) => {
         players: rooms[roomId].players,
         gameState: 'waiting'
       });
+      scheduleRoomPersist(roomId);
       
       console.log(`Room created: ${roomId} by ${username}`);
     } catch (error) {
@@ -247,6 +323,7 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('player_joined', {
       players: rooms[roomId].players
     });
+    scheduleRoomPersist(roomId);
     
       console.log(`Player ${username} joined room ${roomId}`);
     } catch (error) {
@@ -274,6 +351,7 @@ io.on('connection', (socket) => {
     // Create and shuffle deck
     rooms[roomId].deck = shuffleDeck(createDeck());
     rooms[roomId].gameState = 'betting';
+    scheduleRoomPersist(roomId);
     
     // Emit game started event to all players in room
     io.to(roomId).emit('game_started', {
@@ -306,6 +384,7 @@ io.on('connection', (socket) => {
     player.bet = amount;
     player.balance -= amount;
     rooms[roomId].players[playerIndex] = player;
+    scheduleRoomPersist(roomId);
     
     console.log(`💰 [place_bet] Player ${player.username} placed bet of $${amount} in room ${roomId}`);
     console.log(`💰 [place_bet] Updated players:`, rooms[roomId].players.map(p => ({
@@ -391,6 +470,9 @@ io.on('connection', (socket) => {
     
     // Update player in room
     rooms[roomId].players[playerIndex] = player;
+    scheduleRoomPersist(roomId);
+    scheduleRoomPersist(roomId);
+    scheduleRoomPersist(roomId);
     
     // Emit card dealt event immediately (animation is handled client-side)
     io.to(roomId).emit('card_dealt', {
@@ -546,6 +628,7 @@ io.on('connection', (socket) => {
         rooms[roomId].players[originalPlayerIndex] = originalPlayer;
       }
     }
+    scheduleRoomPersist(roomId);
     
     // Emit card dealt event
     io.to(roomId).emit('card_dealt', {
@@ -629,6 +712,7 @@ io.on('connection', (socket) => {
     
     // Add the new hand to the players array
     rooms[roomId].players.push(newHand);
+    scheduleRoomPersist(roomId);
     
     // Emit card dealt events for both hands
     io.to(roomId).emit('card_dealt', {
@@ -791,6 +875,7 @@ io.on('connection', (socket) => {
       });
       
       console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
+      scheduleRoomPersist(roomId);
       return; // Don't continue with new round, since we reset instead
     }
     
@@ -914,12 +999,14 @@ io.on('connection', (socket) => {
       });
       
       console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
+      scheduleRoomPersist(roomId);
       return; // Don't continue with new round, since we reset instead
     }
     
     // Update game state
     rooms[roomId].gameState = 'betting';
     rooms[roomId].currentTurn = null;
+    scheduleRoomPersist(roomId);
     
     // Emit new round event
     io.to(roomId).emit('new_round', {
@@ -1031,6 +1118,7 @@ io.on('connection', (socket) => {
     });
     
     console.log(`✅ Game restarted in room ${roomId}. All players now have $${startingBalance}`);
+    scheduleRoomPersist(roomId);
   });
   
   // Kick a player from the room
@@ -1082,6 +1170,7 @@ io.on('connection', (socket) => {
     
     // Remove player from room
     rooms[roomId].players.splice(playerIndex, 1);
+    scheduleRoomPersist(roomId);
     
     // Notify the kicked player
     io.to(playerId).emit('kicked', {
@@ -1126,6 +1215,7 @@ io.on('connection', (socket) => {
         if (room.players.length === 0) {
           delete rooms[roomId];
           delete resetVotes[roomId];
+          deleteRoomFromSupabase(roomId);
           console.log(`Room ${roomId} deleted after all players disconnected`);
           continue;
         }
@@ -1168,6 +1258,7 @@ io.on('connection', (socket) => {
               players: room.players,
               dealer: room.dealer
             });
+            scheduleRoomPersist(roomId);
           }
         } else if (room.gameState === 'betting') {
           // If in betting phase, check if all remaining players have bet
@@ -1187,6 +1278,7 @@ io.on('connection', (socket) => {
           if (playersNeedingBets.length === 0 && playersWithBets.length > 0) {
             room.gameState = 'playing';
             dealInitialCards(roomId);
+            scheduleRoomPersist(roomId);
           }
         }
         
@@ -1203,6 +1295,7 @@ io.on('connection', (socket) => {
           gameState: room.gameState,
           dealer: room.dealer
         });
+        scheduleRoomPersist(roomId);
         
         console.log(`Player ${disconnectedPlayer.username} (${socket.id}) disconnected from room ${roomId}`);
       }
@@ -1239,6 +1332,7 @@ function dealInitialCards(roomId) {
       rooms[roomId].players[i] = player;
     }
   }
+  scheduleRoomPersist(roomId);
   
   // Deal first round: one card to each player, then dealer
   for (let i = 0; i < rooms[roomId].players.length; i++) {
@@ -1769,6 +1863,7 @@ function resetGameAfterVote(roomId) {
   });
   
   console.log(`Game reset in room ${roomId}. All players now have $${startingBalance}`);
+  scheduleRoomPersist(roomId);
 }
 
 // Determine winners and settle bets
@@ -1922,6 +2017,7 @@ async function settleGame(roomId) {
       },
       allPlayersLost: true
     });
+    scheduleRoomPersist(roomId);
     
     // Clear any existing votes for this room
     resetVotes[roomId] = {};
@@ -1958,6 +2054,7 @@ async function settleGame(roomId) {
       results
     }
   });
+  scheduleRoomPersist(roomId);
 }
 
 // Update leaderboard with player info
@@ -2098,6 +2195,7 @@ async function initializeLeaderboard() {
 
 // Initialize leaderboard when server starts
 initializeLeaderboard();
+loadRoomsFromSupabase();
 
 // Error handling for uncaught exceptions
 process.on('uncaughtException', (error) => {
