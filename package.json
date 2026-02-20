@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "dev:server": "cd blackjack-server && npm run dev",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\""
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
+    "install:all": "npm install && cd blackjack-server && npm install",
+    "run:all": "npm run install:all && npm run dev:all"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.2",
