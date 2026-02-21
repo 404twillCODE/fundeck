@@ -9,10 +9,11 @@ import Container from "@/components/Container";
 import GradientText from "@/components/GradientText";
 
 const navLinks = [
-  { label: "Games", href: "/games" },
-  { label: "Leaderboards", href: "#", disabled: true },
+  { label: "Games", href: "/" },
+  { label: "Host", href: "/host" },
+  { label: "Leaderboards", href: "/leaderboards" },
   { label: "Account", href: "/account" },
-];
+] as Array<{ label: string; href: string; disabled?: boolean }>;
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -52,10 +53,6 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isMobile]);
 
-  useEffect(() => {
-    setIsMenuOpen(false);
-  }, [pathname]);
-
   const underlineTransition = useMemo(
     () =>
       prefersReducedMotion
@@ -63,6 +60,12 @@ export default function Navbar() {
         : { type: "spring" as const, stiffness: 160, damping: 18 },
     [prefersReducedMotion],
   );
+
+  const isLinkActive = (href: string) => {
+    if (href === "#") return false;
+    if (href === "/") return pathname === "/";
+    return pathname?.startsWith(href);
+  };
 
   return (
     <motion.header
@@ -102,8 +105,7 @@ export default function Navbar() {
 
           <nav className="hidden items-center gap-6 text-sm md:flex">
             {navLinks.map((link) => {
-              const isActive =
-                link.href !== "#" && pathname?.startsWith(link.href);
+              const isActive = isLinkActive(link.href);
               if (link.disabled) {
                 return (
                   <span
@@ -186,8 +188,7 @@ export default function Navbar() {
             <Container>
               <div className="flex flex-col gap-4 py-6 text-sm">
                 {navLinks.map((link) => {
-                  const isActive =
-                    link.href !== "#" && pathname?.startsWith(link.href);
+                  const isActive = isLinkActive(link.href);
                   if (link.disabled) {
                     return (
                       <span
@@ -206,6 +207,7 @@ export default function Navbar() {
                     <Link
                       key={link.label}
                       href={link.href}
+                      onClick={() => setIsMenuOpen(false)}
                       className={`group relative inline-flex items-center justify-between text-white/80 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                         isActive
                           ? "text-white"

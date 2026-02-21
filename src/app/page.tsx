@@ -1,51 +1,51 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
 import Container from "@/components/Container";
 import GameCard from "@/components/GameCard";
 import GradientText from "@/components/GradientText";
 import { games, type GameCategory } from "@/data/games";
-import Auth from "@/games/blackjack/components/Auth";
-import { useAuth } from "@/games/blackjack/contexts/AuthContext";
 
 const headline = "Pick a game. Jump in. Have fun.";
+const searchCategories = ["All", "Casino", "Party", "Social", "Debate"] as const;
+const categoryOrder: GameCategory[] = ["Casino", "Party", "Social", "Debate"];
 
 export default function Home() {
   const prefersReducedMotion = useReducedMotion();
-  const { loading, username, authEnabled } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
-  const categoryOrder: GameCategory[] = ["Casino", "Party", "Social", "Debate"];
-  const gamesByCategory = categoryOrder
-    .map((category) => ({
-      category,
-      games: games.filter((game) => game.category === category),
-    }))
-    .filter((group) => group.games.length > 0);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 200);
 
-  if (loading) {
-    return (
-      <main className="flex-1">
-        <section className="relative overflow-hidden py-20 sm:py-28">
-          <Container>
-            <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-white/70">
-              Loading FunDeck...
-            </div>
-          </Container>
-        </section>
-      </main>
+    return () => window.clearTimeout(timeoutId);
+  }, [searchQuery]);
+
+  const filteredGames = useMemo(() => {
+    const normalizedQuery = debouncedSearchQuery.trim().toLowerCase();
+    if (!normalizedQuery) return games;
+
+    return games.filter((game) =>
+      [game.name, game.description, game.category].some((value) =>
+        value.toLowerCase().includes(normalizedQuery),
+      ),
     );
-  }
+  }, [debouncedSearchQuery]);
 
-  if (authEnabled && !username) {
-    return (
-      <main className="flex-1">
-        <section className="relative overflow-hidden py-20 sm:py-28">
-          <Auth />
-        </section>
-      </main>
-    );
-  }
+  const gamesByCategory = useMemo(
+    () =>
+      categoryOrder
+        .map((category) => ({
+          category,
+          games: filteredGames.filter((game) => game.category === category),
+        }))
+        .filter((group) => group.games.length > 0),
+    [filteredGames],
+  );
 
   return (
     <main className="flex-1">
@@ -116,40 +116,82 @@ export default function Home() {
 
       <section className="pb-24">
         <Container>
-          <div className="space-y-12">
-            {gamesByCategory.map(({ category, games: categoryGames }) => (
-              <div key={category} className="space-y-4">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">
-                  {category}
-                </h2>
-                <motion.div
-                  initial="hidden"
-                  whileInView="visible"
-                  viewport={{ once: true, amount: 0.2 }}
-                  variants={{
-                    hidden: { opacity: 0 },
-                    visible: {
-                      opacity: 1,
-                      transition: { staggerChildren: 0.08 },
-                    },
-                  }}
-                  className="grid gap-6 md:grid-cols-2 xl:grid-cols-3"
-                >
-                  {categoryGames.map((game) => (
-                    <motion.div
-                      key={game.slug}
-                      variants={{
-                        hidden: { opacity: 0, y: 12 },
-                        visible: { opacity: 1, y: 0 },
-                      }}
-                      transition={{ type: "spring", stiffness: 140, damping: 16 }}
+          <div className="space-y-8">
+            <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search games"
+                className="h-12 w-full rounded-full border border-white/10 bg-black/30 px-5 text-sm text-white placeholder:text-white/30"
+              />
+              <div className="flex flex-wrap gap-2">
+                {searchCategories.map((category) => {
+                  const categoryValue = category === "All" ? "" : category;
+                  const isActive =
+                    category === "All"
+                      ? searchQuery.trim() === ""
+                      : searchQuery.trim().toLowerCase() ===
+                        category.toLowerCase();
+
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => setSearchQuery(categoryValue)}
+                      className={`rounded-full border px-4 py-2 text-xs uppercase tracking-[0.2em] transition ${
+                        isActive
+                          ? "border-white/20 bg-white/10 text-white"
+                          : "border-white/10 bg-white/5 text-white/60 hover:text-white"
+                      }`}
                     >
-                      <GameCard game={game} />
-                    </motion.div>
-                  ))}
-                </motion.div>
+                      {category}
+                    </button>
+                  );
+                })}
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-12">
+              {gamesByCategory.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-white/70">
+                  No games matched your search.
+                </div>
+              ) : (
+                gamesByCategory.map(({ category, games: categoryGames }) => (
+                  <div key={category} className="space-y-4">
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.4em] text-white/50">
+                      {category}
+                    </h2>
+                    <motion.div
+                      initial="hidden"
+                      whileInView="visible"
+                      viewport={{ once: true, amount: 0.2 }}
+                      variants={{
+                        hidden: { opacity: 0 },
+                        visible: {
+                          opacity: 1,
+                          transition: { staggerChildren: 0.08 },
+                        },
+                      }}
+                      className="grid gap-6 md:grid-cols-2 xl:grid-cols-3"
+                    >
+                      {categoryGames.map((game) => (
+                        <motion.div
+                          key={game.slug}
+                          variants={{
+                            hidden: { opacity: 0, y: 12 },
+                            visible: { opacity: 1, y: 0 },
+                          }}
+                          transition={{ type: "spring", stiffness: 140, damping: 16 }}
+                        >
+                          <GameCard game={game} />
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </Container>
       </section>

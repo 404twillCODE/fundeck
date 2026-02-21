@@ -1,37 +1,78 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { supabase } from "@/games/blackjack/lib/supabase";
+import { getSocketServerUrl } from "@/lib/socket";
 
-type AuthContextValue = {
-  user: unknown;
-  session: unknown;
-  loading: boolean;
-  balance: number;
-  username: string;
-  email: string | null;
-  authEnabled: boolean;
-  setBalance: (balance: number) => Promise<void> | void;
-  sendPasswordReset: (email: string) => Promise<{ error: string | null }>;
-  signUp: (
-    email: string,
-    password: string,
-    username: string,
-  ) => Promise<{ data: unknown; error: unknown; requiresConfirmation?: boolean }>;
-  signIn: (
-    emailOrUsername: string,
-    password: string,
-  ) => Promise<{ data: unknown; error: unknown }>;
-  signOut: () => Promise<void>;
-  updateUsername: (nextUsername: string) => Promise<{ error: string | null }>;
-  updateEmail: (nextEmail: string) => Promise<{ error: string | null }>;
-  updatePassword: (nextPassword: string) => Promise<{ error: string | null }>;
-  continueAsGuest: () => void;
-  isGuest: boolean;
+type LocalUser = {
+  id: string;
+  email: string;
+  defaultName: string;
+  createdAt?: string | null;
 };
 
+type LocalStats = {
+  gamesPlayed: number;
+  blackjackWins: number;
+  blackjackLosses: number;
+  chips: number;
+  updatedAt?: string | null;
+};
+
+type AuthContextValue = {
+  user: LocalUser | null;
+  loading: boolean;
+  username: string;
+  email: string | null;
+  stats: LocalStats | null;
+  signUp: (email: string, password: string, username?: string) => Promise<{ data: unknown; error: unknown; requiresConfirmation?: boolean }>;
+  signIn: (emailOrUsername: string, password: string) => Promise<{ data: unknown; error: unknown }>;
+  signOut: () => Promise<void>;
+  updateUsername: (nextUsername: string) => Promise<{ error: string | null }>;
+};
+
+type MeResponse = {
+  user: LocalUser;
+  stats: LocalStats;
+};
+
+const DISPLAY_NAME_KEY = "fundeck:displayName";
+const DEV_LOGGING = process.env.NODE_ENV !== "production";
+
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function devLog(message: string, details?: unknown) {
+  if (!DEV_LOGGING) return;
+  if (details === undefined) {
+    console.log(`[auth] ${message}`);
+    return;
+  }
+  console.log(`[auth] ${message}`, details);
+}
+
+function normalizeDisplayName(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ").slice(0, 24);
+}
+
+function defaultNameFromEmail(email: string): string {
+  const localPart = String(email || "").trim().toLowerCase().split("@")[0] || "player";
+  return normalizeDisplayName(localPart) || "player";
+}
+
+function getStoredDisplayName(): string {
+  if (typeof window === "undefined") return "";
+  return normalizeDisplayName(localStorage.getItem(DISPLAY_NAME_KEY) || "");
+}
+
+function setStoredDisplayName(name: string) {
+  if (typeof window === "undefined") return;
+  const normalized = normalizeDisplayName(name);
+  if (!normalized) {
+    localStorage.removeItem(DISPLAY_NAME_KEY);
+    return;
+  }
+  localStorage.setItem(DISPLAY_NAME_KEY, normalized);
+}
 
 export const useAuth = () => {
   const value = useContext(AuthContext);
@@ -42,528 +83,177 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<unknown>(null);
-  const [session, setSession] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState(1000);
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState<string | null>(null);
-  const authEnabled = Boolean(supabase);
+  const [user, setUser] = useState<LocalUser | null>(null);
+  const [stats, setStats] = useState<LocalStats | null>(null);
+  const [displayNameOverride, setDisplayNameOverride] = useState(() => getStoredDisplayName());
+  const baseUrl = useMemo(() => getSocketServerUrl().replace(/\/$/, ""), []);
 
-  const isMissingTableError = (error: unknown) => {
-    const code = (error as { code?: string })?.code;
-    const message = (error as { message?: string })?.message;
-    return (
-      code === "42P01" ||
-      code === "PGRST205" ||
-      (typeof message === "string" && message.includes("Could not find the table"))
-    );
-  };
+  const request = useCallback(
+    async <T,>(path: string, init?: RequestInit): Promise<{ data: T | null; error: string | null }> => {
+      try {
+        const headers = new Headers(init?.headers);
+        if (!headers.has("Content-Type")) {
+          headers.set("Content-Type", "application/json");
+        }
 
-  const getUserEmail = (currentUser: unknown) =>
-    (currentUser as { email?: string } | null)?.email ?? null;
+        const response = await fetch(`${baseUrl}${path}`, {
+          credentials: "include",
+          headers,
+          ...init,
+        });
 
-  const getMetadataUsername = (currentUser: unknown) => {
-    const raw = (currentUser as { user_metadata?: { username?: string } } | null)
-      ?.user_metadata?.username;
-    return typeof raw === "string" ? raw.trim() : "";
-  };
+        const payload = (await response.json().catch(() => null)) as { error?: string } & T | null;
+        if (!response.ok) {
+          return { data: null, error: payload?.error || `Request failed (${response.status})` };
+        }
 
-  const generateGuestUsername = () => {
-    const randomNum = Math.floor(Math.random() * 10000);
-    return `guest${randomNum}`;
-  };
+        return { data: payload as T, error: null };
+      } catch (error) {
+        return {
+          data: null,
+          error: error instanceof Error ? error.message : "Network request failed",
+        };
+      }
+    },
+    [baseUrl],
+  );
 
-  useEffect(() => {
-    if (!supabase) {
-      const storedGuest = sessionStorage.getItem("guestUsername");
-      const guestUsername = storedGuest || generateGuestUsername();
-      sessionStorage.setItem("guestUsername", guestUsername);
-      setUsername(guestUsername);
-      setBalance(1000);
-      setLoading(false);
+  const applyMePayload = useCallback((payload: MeResponse | null) => {
+    if (!payload || !payload.user) {
+      setUser(null);
+      setStats(null);
       return;
     }
 
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (error) {
-        console.error("Error getting session:", error);
-        setLoading(false);
-        return;
-      }
-
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setEmail(getUserEmail(data.session?.user ?? null));
-      if (data.session?.user) {
-        loadUserBalance(data.session.user.id);
-        loadUsername(data.session.user.id, data.session.user);
-      } else {
-        const guestMode = sessionStorage.getItem("guestMode");
-        if (guestMode === "true") {
-          const guestUsername = generateGuestUsername();
-          setUsername(guestUsername);
-          setBalance(1000);
-        }
-      }
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setEmail(getUserEmail(currentSession?.user ?? null));
-      if (currentSession?.user) {
-        loadUserBalance(currentSession.user.id);
-        loadUsername(currentSession.user.id, currentSession.user);
-        sessionStorage.removeItem("guestMode");
-      } else {
-        const guestMode = sessionStorage.getItem("guestMode");
-        if (guestMode === "true") {
-          const guestUsername = generateGuestUsername();
-          setUsername(guestUsername);
-          setBalance(1000);
-        } else {
-          setUsername("");
-          setBalance(1000);
-        }
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    setUser(payload.user);
+    setStats(payload.stats);
   }, []);
 
-  const loadUserBalance = async (userId: string) => {
-    if (!supabase) return;
-    try {
-      const { data, error } = await supabase
-        .from("user_balances")
-        .select("balance")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (error) {
-        if (error.code !== "PGRST116" && !isMissingTableError(error)) {
-          console.error("Error loading balance:", error);
-        }
-        setBalance(1000);
-        return;
-      }
-
-      if (data && data.balance !== undefined && data.balance !== null) {
-        setBalance(data.balance > 0 ? data.balance : 1000);
-      } else {
-        await createUserBalance(userId, 1000);
-        setBalance(1000);
-      }
-    } catch (error) {
-      console.error("Error loading balance:", error);
-      setBalance(1000);
-    }
-  };
-
-  const loadUsername = async (userId: string, currentUser?: unknown) => {
-    if (!supabase) return;
-    try {
-      const { data, error } = await supabase
-        .from("user_profiles")
-        .select("username")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (error) {
-        if (error.code !== "PGRST116" && !isMissingTableError(error)) {
-          console.error("Error loading username:", error);
-        }
-        const fallbackUsername = getMetadataUsername(currentUser ?? user);
-        if (fallbackUsername) {
-          setUsername(fallbackUsername);
-        }
-        return;
-      }
-
-      if (data?.username) {
-        setUsername(data.username);
-      } else {
-        const fallbackUsername = getMetadataUsername(currentUser ?? user);
-        if (fallbackUsername) {
-          setUsername(fallbackUsername);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading username:", error);
-    }
-  };
-
-  const createUserBalance = async (userId: string, initialBalance = 1000) => {
-    if (!supabase) return;
-    try {
-      const { error } = await supabase.from("user_balances").insert({
-        user_id: userId,
-        balance: initialBalance,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (error && !isMissingTableError(error)) {
-        console.error("Error creating balance:", error);
-      }
-    } catch (error) {
-      if (!isMissingTableError(error)) {
-        console.error("Error creating balance:", error);
-      }
-    }
-  };
-
-  const updateBalance = async (newBalance: number) => {
-    setBalance(newBalance);
-
-    if (!supabase || !user) {
+  const refreshMe = useCallback(async () => {
+    const response = await request<MeResponse>("/api/me", { method: "GET" });
+    if (response.error) {
+      applyMePayload(null);
+      devLog("refresh_me:unauthenticated", response.error);
       return;
     }
 
-    try {
-      const balanceToSave = newBalance > 0 ? newBalance : 1000;
+    applyMePayload(response.data);
+    devLog("refresh_me:ok", { userId: response.data?.user.id });
+  }, [applyMePayload, request]);
 
-      const { error } = await supabase
-        .from("user_balances")
-        .upsert(
-          {
-            user_id: (user as { id: string }).id,
-            balance: balanceToSave,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "user_id",
-          },
-        );
+  useEffect(() => {
+    refreshMe().finally(() => setLoading(false));
+  }, [refreshMe]);
 
-      if (error) {
-        if (!isMissingTableError(error)) {
-          console.error("Error updating balance:", error);
-        }
-      } else if (balanceToSave !== newBalance) {
-        setBalance(balanceToSave);
-      }
-    } catch (error) {
-      if (!isMissingTableError(error)) {
-        console.error("Error updating balance:", error);
-      }
-    }
-  };
-
-  const signUp = async (email: string, password: string, name: string) => {
-    if (!supabase) {
-      return {
-        data: null,
-        error: { message: "Supabase is not configured." },
-      };
-    }
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username: name,
-          },
-          emailRedirectTo: window.location.origin,
-        },
+  const register = useCallback(
+    async (email: string, password: string) => {
+      const response = await request<MeResponse>("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
       });
-
-      if (error) throw error;
-
-      if (data.user) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        if (data.session) {
-          const { error: profileError } = await supabase
-            .from("user_profiles")
-            .upsert(
-              {
-                user_id: data.user.id,
-                username: name,
-                email,
-                created_at: new Date().toISOString(),
-              },
-              { onConflict: "user_id" },
-            );
-
-          if (profileError && !isMissingTableError(profileError)) {
-            console.error("Error upserting profile:", profileError);
-          }
-        }
-
-        if (data.session) {
-          setUsername(name);
-          await loadUserBalance(data.user.id);
-          await loadUsername(data.user.id, data.user);
-        } else {
-          return {
-            data,
-            error: null,
-            requiresConfirmation: true,
-          };
-        }
+      if (response.error) {
+        devLog("register:error", response.error);
+        return { error: response.error };
       }
+      applyMePayload(response.data);
+      devLog("register:ok", { userId: response.data?.user.id });
+      return { error: null };
+    },
+    [applyMePayload, request],
+  );
 
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error };
-    }
-  };
-
-  const sendPasswordReset = async (targetEmail: string) => {
-    if (!supabase) {
-      return { error: "Supabase is not configured." };
-    }
-    const trimmed = targetEmail.trim();
-    if (!trimmed) {
-      return { error: "Email is required." };
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
-      redirectTo: window.location.origin,
-    });
-    if (error) {
-      return { error: error.message || "Unable to send reset email." };
-    }
-    return { error: null };
-  };
-
-  const signIn = async (emailOrUsername: string, password: string) => {
-    if (!supabase) {
-      return {
-        data: null,
-        error: { message: "Supabase is not configured." },
-      };
-    }
-    try {
-      let emailToUse = emailOrUsername;
-      let usernameCandidate = "";
-
-      if (!emailOrUsername.includes("@")) {
-        usernameCandidate = emailOrUsername.trim();
-        const { data: emailData, error: rpcError } = await supabase.rpc(
-          "get_email_by_username",
-          {
-            username_to_find: emailOrUsername,
-          },
-        );
-
-        if (rpcError && isMissingTableError(rpcError)) {
-          return {
-            data: null,
-            error: {
-              message: "Username sign-in is unavailable. Please use your email.",
-            },
-          };
-        }
-
-        if (!emailData || emailData.length === 0 || !emailData[0]?.email) {
-          const { data: profileData, error: profileError } = await supabase
-            .from("user_profiles")
-            .select("email")
-            .eq("username", emailOrUsername)
-            .maybeSingle();
-
-          if (profileError) {
-            if (isMissingTableError(profileError)) {
-              return {
-                data: null,
-                error: {
-                  message: "Username sign-in is unavailable. Please use your email.",
-                },
-              };
-            }
-          }
-
-          if (profileError || !profileData?.email) {
-            return {
-              data: null,
-              error: { message: "Invalid username or password" },
-            };
-          }
-
-          emailToUse = profileData.email;
-        } else {
-          emailToUse = emailData[0].email;
-        }
-      }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: emailToUse,
-        password,
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const response = await request<MeResponse>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
       });
-
-      if (error) throw error;
-
-      if (data.user) {
-        await loadUserBalance(data.user.id);
-        await loadUsername(data.user.id, data.user);
-        const metadataUsername = getMetadataUsername(data.user);
-        const finalUsername = usernameCandidate || metadataUsername;
-
-        if (finalUsername) {
-          setUsername(finalUsername);
-          const { error: profileError } = await supabase
-            .from("user_profiles")
-            .upsert(
-              {
-                user_id: data.user.id,
-                username: finalUsername,
-                email: emailToUse,
-                created_at: new Date().toISOString(),
-              },
-              { onConflict: "user_id" },
-            );
-
-          if (profileError && !isMissingTableError(profileError)) {
-            console.error("Error upserting profile:", profileError);
-          }
-        }
+      if (response.error) {
+        devLog("login:error", response.error);
+        return { error: response.error };
       }
+      applyMePayload(response.data);
+      devLog("login:ok", { userId: response.data?.user.id });
+      return { error: null };
+    },
+    [applyMePayload, request],
+  );
 
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error };
+  const signOut = useCallback(async () => {
+    await request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+    setUser(null);
+    setStats(null);
+    devLog("logout:ok");
+  }, [request]);
+
+  const updateUsername = useCallback(async (nextUsername: string) => {
+    const normalized = normalizeDisplayName(nextUsername);
+    if (!normalized) {
+      return { error: "Display name cannot be empty." };
     }
-  };
-
-  const signOut = async () => {
-    if (!supabase) return;
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-
-      sessionStorage.removeItem("guestMode");
-      setUsername("");
-      setBalance(1000);
-      setEmail(null);
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
-  };
-
-  const updateUsername = async (nextUsername: string) => {
-    if (!supabase || !user) {
-      return { error: "You must be signed in to update your username." };
-    }
-
-    const trimmed = nextUsername.trim();
-    if (!trimmed) {
-      return { error: "Username cannot be empty." };
-    }
-
-    const userEmail = getUserEmail(user);
-
-    const { error: authError } = await supabase.auth.updateUser({
-      data: { username: trimmed },
-    });
-
-    if (authError && !isMissingTableError(authError)) {
-      return { error: authError.message || "Unable to update username." };
-    }
-
-    const { error: profileError } = await supabase
-      .from("user_profiles")
-      .upsert(
-        {
-          user_id: (user as { id: string }).id,
-          username: trimmed,
-          email: userEmail ?? undefined,
-          created_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-
-    if (profileError && !isMissingTableError(profileError)) {
-      return { error: profileError.message || "Unable to update username." };
-    }
-
-    setUsername(trimmed);
+    setDisplayNameOverride(normalized);
+    setStoredDisplayName(normalized);
     return { error: null };
-  };
+  }, []);
 
-  const updateEmail = async (nextEmail: string) => {
-    if (!supabase || !user) {
-      return { error: "You must be signed in to update your email." };
-    }
+  const username = useMemo(() => {
+    if (!user) return "";
+    return normalizeDisplayName(displayNameOverride) || user.defaultName || defaultNameFromEmail(user.email);
+  }, [displayNameOverride, user]);
 
-    const trimmed = nextEmail.trim();
-    if (!trimmed) {
-      return { error: "Email cannot be empty." };
-    }
+  const signUp = useCallback<AuthContextValue["signUp"]>(
+    async (email, password, usernameInput) => {
+      const response = await register(email, password);
+      if (response.error) {
+        return { data: null, error: { message: response.error } };
+      }
+      if (usernameInput && usernameInput.trim()) {
+        await updateUsername(usernameInput);
+      }
+      return { data: { ok: true }, error: null, requiresConfirmation: false };
+    },
+    [register, updateUsername],
+  );
 
-    const { error } = await supabase.auth.updateUser({ email: trimmed });
-    if (error) {
-      return { error: error.message || "Unable to update email." };
-    }
+  const signIn = useCallback<AuthContextValue["signIn"]>(
+    async (emailOrUsername, password) => {
+      const normalized = String(emailOrUsername || "").trim().toLowerCase();
+      if (!normalized.includes("@")) {
+        return { data: null, error: { message: "Use your account email to sign in." } };
+      }
+      const response = await login(normalized, password);
+      if (response.error) {
+        return { data: null, error: { message: response.error } };
+      }
+      return { data: { ok: true }, error: null };
+    },
+    [login],
+  );
 
-    const { error: profileError } = await supabase
-      .from("user_profiles")
-      .upsert(
-        {
-          user_id: (user as { id: string }).id,
-          username,
-          email: trimmed,
-          created_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-
-    if (profileError && !isMissingTableError(profileError)) {
-      return { error: profileError.message || "Unable to update email." };
-    }
-
-    setEmail(trimmed);
-    return { error: null };
-  };
-
-  const updatePassword = async (nextPassword: string) => {
-    if (!supabase || !user) {
-      return { error: "You must be signed in to update your password." };
-    }
-
-    if (!nextPassword || nextPassword.length < 6) {
-      return { error: "Password must be at least 6 characters." };
-    }
-
-    const { error } = await supabase.auth.updateUser({ password: nextPassword });
-    if (error) {
-      return { error: error.message || "Unable to update password." };
-    }
-
-    return { error: null };
-  };
-
-  const continueAsGuest = () => {
-    const guestUsername = generateGuestUsername();
-    setUsername(guestUsername);
-    setBalance(1000);
-    sessionStorage.setItem("guestMode", "true");
-    sessionStorage.setItem("guestUsername", guestUsername);
-  };
-
-  const value: AuthContextValue = {
-    user,
-    session,
-    loading,
-    balance,
-    username,
-    email,
-    authEnabled,
-    setBalance: updateBalance,
-    sendPasswordReset,
-    signUp,
-    signIn,
-    signOut,
-    updateUsername,
-    updateEmail,
-    updatePassword,
-    continueAsGuest,
-    isGuest: !user,
-  };
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      loading,
+      username,
+      email: user?.email ?? null,
+      stats,
+      signUp,
+      signIn,
+      signOut,
+      updateUsername,
+    }),
+    [
+      user,
+      loading,
+      stats,
+      username,
+      signUp,
+      signIn,
+      signOut,
+      updateUsername,
+    ],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

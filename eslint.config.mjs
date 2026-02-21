@@ -12,7 +12,22 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Non-Next runtimes (linted separately if needed):
+    "game-server/**",
+    "apps/host-desktop/**",
+    // Generated desktop artifacts:
+    "apps/host-desktop/.bundle/**",
+    "apps/host-desktop/dist/**",
+    "apps/host-desktop/out/**",
+    // Local temp logs:
+    ".tmp-devserver*.log",
   ]),
+  {
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

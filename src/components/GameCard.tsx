@@ -39,7 +39,7 @@ export default function GameCard({ game }: GameCardProps) {
   };
 
   const playHref =
-    game.slug === "blackjack" ? "/games/blackjack" : `/games/${game.slug}`;
+    game.slug === "blackjack" ? "/host" : `/games/${game.slug}`;
   const wipLabel = game.wipLabel ?? "WIP";
 
   return (

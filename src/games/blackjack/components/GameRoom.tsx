@@ -671,9 +671,8 @@ export default function GameRoom() {
     toggleHints,
     autoSkipNewRound,
     setAutoSkipNewRound,
-    startNewRound,
     kickPlayer,
-    socket,
+    selfPlayerId,
     isPickingUpCards,
     showVotePrompt,
     voteStatus,
@@ -693,7 +692,7 @@ export default function GameRoom() {
     leaveRoom();
   };
 
-  const isHost = players.length > 0 && socket?.id === players[0]?.id;
+  const isHost = players.length > 0 && selfPlayerId === players[0]?.id;
 
   const handleAutoSkipToggle = () => {
     setAutoSkipNewRound(!autoSkipNewRound);
