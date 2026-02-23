@@ -19,6 +19,7 @@ const {
 const { MemoryStore } = require("./persistence/memory-store");
 const { SqliteStore } = require("./persistence/sqlite-store");
 const { AuthStore } = require("./persistence/auth-store");
+const { MemoryAuthStore } = require("./persistence/memory-auth-store");
 const { registerGame, getGame, getGames } = require("./games");
 const { registerBlackjack } = require("./games/blackjack");
 
@@ -29,7 +30,7 @@ const FORCE_SERVE_NEXT = process.argv.includes("--serve-next");
 const IS_DEV = NODE_ENV !== "production" && !FORCE_SERVE_NEXT;
 const NEXT_APP_DIR = process.env.NEXT_APP_DIR
   ? path.resolve(process.env.NEXT_APP_DIR)
-  : path.resolve(__dirname, "..", "..");
+  : path.resolve(__dirname, "..", "..", "join-website");
 
 const JOIN_LIMIT_WINDOW_MS = 60 * 1000;
 const JOIN_LIMIT_MAX = Number(process.env.JOIN_RATE_LIMIT_PER_IP || 20);
@@ -213,7 +214,13 @@ async function bootstrap() {
   registerBlackjack(registerGame);
 
   const { store, mode } = createStore();
-  const authStore = new AuthStore({ dbPath: SQLITE_DB_PATH });
+  let authStore;
+  try {
+    authStore = new AuthStore({ dbPath: SQLITE_DB_PATH });
+  } catch (error) {
+    console.warn("[auth] SQLite unavailable (e.g. better-sqlite3 not built), using in-memory auth:", error.message);
+    authStore = new MemoryAuthStore();
+  }
   const rooms = new Map();
   const joinAttempts = new Map();
 

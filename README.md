@@ -1,71 +1,35 @@
-# FunDeck (Local-First)
+# FunDeck
 
-FunDeck is a local-first multiplayer party/casino game hub.
-The host runs one local server (`game-server`) that provides:
+Local-first multiplayer game hub. Four parts:
 
-- Player website UI
-- Host dashboard
-- Real-time Socket.IO multiplayer backend
+- **website** — Main site (download, games, contribute). `cd website` → `npm install` → `npm run dev`
+- **desktop** — Electron app that runs the server on your PC. **End users:** download the built installer and run it; the app starts the game server and serves the join site by itself. **Developers:** see below.
+- **server** — Game server (Express + Socket.IO). Serves the join-website. `cd server` → `npm install` → `npm start` (or run via desktop)
+- **join-website** — Next.js app players see when they open the host’s URL. `cd join-website` → `npm install` → `npm run build` (then server or desktop serves it)
 
-No cloud backend is required.
+## Building the desktop app for distribution
 
-## Local Development
+The desktop app is self-contained: once built, users only need to run the installer. The app bundles the server and the built join-website.
 
-1. Install dependencies:
-
-```bash
-npm run install:all
-```
-
-2. Start everything (Next + game-server):
+From the **desktop** folder, run:
 
 ```bash
-npm run dev:all
+cd desktop
+npm install
+npm run build-all
 ```
 
-3. Open:
+That will: install and build **join-website**, bundle the **server** (with its dependencies), then run **electron-builder** to produce the Windows installer and portable exe in `desktop/dist/`. Users run the exe and use “Start server” in the app; no separate setup.
 
-- Frontend: `http://localhost:3000`
-- Game server: `http://localhost:5250`
+## Development (desktop)
 
-## Production Build
-
-1. Install dependencies:
+To run the desktop app in dev, from the **desktop** folder:
 
 ```bash
-npm run install:all
+cd desktop
+npm install
+npm run setup-dev
+npm run dev
 ```
 
-2. Build:
-
-```bash
-npm run build
-```
-
-3. Start production server (single command):
-
-```bash
-npm start
-```
-
-This starts only `game-server`, which serves the built Next app and Socket.IO from one process.
-
-## LOCAL HOSTING
-
-1. Dev mode (two processes):
-
-```bash
-npm run dev:all
-```
-
-2. Production mode (single local server):
-
-```bash
-npm run build
-npm start
-```
-
-3. Share with friends:
-
-- LAN: use the LAN URL printed by `game-server` on startup.
-- Internet: run your own tunnel (for example Cloudflare Tunnel, Tailscale Funnel, or playit) and share `http(s)://<your-host>/join/<ROOM_CODE>`.
+`setup-dev` installs server dependencies and builds join-website so the app can start the server. After that, `npm run dev` works. You only need to run `setup-dev` once (or after pulling changes to server/join-website).

@@ -1,14 +1,18 @@
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 
-const rootDir = path.resolve(__dirname, "..", "..", "..");
+const rootDir = path.resolve(__dirname, "..", "..");
 const desktopDir = path.resolve(__dirname, "..");
 const bundleDir = path.join(desktopDir, ".bundle");
+const joinWebsiteDir = path.join(rootDir, "join-website");
+const serverDir = path.join(rootDir, "server");
 
 const requiredPaths = {
-  nextBuild: path.join(rootDir, ".next"),
-  nextPublic: path.join(rootDir, "public"),
-  serverSrc: path.join(rootDir, "game-server", "src"),
+  nextBuild: path.join(joinWebsiteDir, ".next"),
+  nextPublic: path.join(joinWebsiteDir, "public"),
+  serverSrc: path.join(serverDir, "src"),
+  serverPackage: path.join(serverDir, "package.json"),
 };
 
 function ensureExists(targetPath, label) {
@@ -47,15 +51,18 @@ function copyRecursive(source, destination, options = {}) {
 function main() {
   ensureExists(requiredPaths.nextBuild, ".next build output");
   ensureExists(requiredPaths.nextPublic, "public directory");
-  ensureExists(requiredPaths.serverSrc, "game-server/src");
+  ensureExists(requiredPaths.serverSrc, "server/src");
+  ensureExists(requiredPaths.serverPackage, "server/package.json");
 
   fs.rmSync(bundleDir, { recursive: true, force: true });
   fs.mkdirSync(bundleDir, { recursive: true });
 
-  const bundleServerDir = path.join(bundleDir, "server", "src");
+  const bundleServerDir = path.join(bundleDir, "server");
+  const bundleServerSrc = path.join(bundleServerDir, "src");
   const bundleWebDir = path.join(bundleDir, "web");
 
-  copyRecursive(requiredPaths.serverSrc, bundleServerDir);
+  copyRecursive(requiredPaths.serverSrc, bundleServerSrc);
+  fs.copyFileSync(requiredPaths.serverPackage, path.join(bundleServerDir, "package.json"));
   const nextSource = requiredPaths.nextBuild;
   copyRecursive(nextSource, path.join(bundleWebDir, ".next"), {
     filter: (entryPath) => {
@@ -76,10 +83,20 @@ function main() {
   ];
 
   filesToCopy.forEach((fileName) => {
-    const sourcePath = path.join(rootDir, fileName);
+    const sourcePath = path.join(joinWebsiteDir, fileName);
     if (!fs.existsSync(sourcePath)) return;
     copyRecursive(sourcePath, path.join(bundleWebDir, fileName));
   });
+
+  console.log("[desktop] Installing server dependencies in bundle...");
+  const npmInstall = spawnSync("npm", ["install", "--production", "--no-audit", "--no-fund"], {
+    cwd: bundleServerDir,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (npmInstall.status !== 0) {
+    throw new Error("npm install failed in bundle/server. Check that server/package.json is valid.");
+  }
 
   console.log(`[desktop] bundle prepared at ${bundleDir}`);
 }
