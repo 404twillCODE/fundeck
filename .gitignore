@@ -1,8 +1,5 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies (root and all subdirs: game-server, apps/host-desktop, etc.)
+# dependencies
 node_modules
-/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -14,11 +11,10 @@ node_modules
 # testing
 /coverage
 
-# next.js
-/.next/
+# next.js (website + join-website)
+.next/
 /out/
-
-# production
+/website/out/
 /build
 
 # misc
@@ -32,7 +28,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env
 .env*
 
 # vercel
@@ -47,14 +43,14 @@ next-env.d.ts
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
-/game-server/game-server-data.sqlite
-/game-server/game-server-data.sqlite-shm
-/game-server/game-server-data.sqlite-wal
+/server/*.sqlite
+/server/*.sqlite-shm
+/server/*.sqlite-wal
 
 # desktop build artifacts
-/apps/host-desktop/.bundle/
-/apps/host-desktop/dist/
-/apps/host-desktop/out/
+/desktop/.bundle/
+/desktop/dist/
+/desktop/out/
 
 # local temp logs
 .tmp-devserver*.log
