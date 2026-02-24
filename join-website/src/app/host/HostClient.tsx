@@ -43,6 +43,7 @@ function HostContent() {
   const [localError, setLocalError] = useState<string | null>(null);
   const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [networkInfoError, setNetworkInfoError] = useState<string | null>(null);
+  const [isLocalHost, setIsLocalHost] = useState<boolean | null>(null);
 
   const liveGames = useMemo(() => games.filter((game) => game.status === "live"), []);
   const code = room?.roomCode || createdCode;
@@ -51,6 +52,47 @@ function HostContent() {
   const localHostUrl = networkInfo?.localUrl || fallbackLocalUrl(serverUrl);
   const lanHostUrl = networkInfo?.lanUrl || "";
   const publicHostUrl = networkInfo?.publicUrl || "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hostname = window.location.hostname;
+    const isLocal =
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1";
+    setIsLocalHost(isLocal);
+  }, []);
+
+  if (isLocalHost === false) {
+    return (
+      <main className="flex-1 py-16">
+        <Container>
+          <NeonCard className="space-y-3 p-6 text-white/80">
+            <h1 className="text-2xl font-semibold text-white">Host Dashboard</h1>
+            <p className="text-white/60">
+              This host dashboard can only be used from the host machine (localhost).
+            </p>
+            <Link
+              href="/"
+              className="inline-flex rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80"
+            >
+              Back to Home
+            </Link>
+          </NeonCard>
+        </Container>
+      </main>
+    );
+  }
+
+  if (isLocalHost === null) {
+    return (
+      <main className="flex-1 py-16">
+        <Container>
+          <NeonCard className="p-6 text-white/70">Loading host dashboard...</NeonCard>
+        </Container>
+      </main>
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -111,12 +153,12 @@ function HostContent() {
           <NeonCard className="space-y-3 p-6 text-white/80">
             <h1 className="text-2xl font-semibold text-white">Host Dashboard</h1>
             <p className="text-white/60">Sign in with a local account before creating rooms.</p>
-            <Link
+            <a
               href="/account?next=/host"
               className="inline-flex rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80"
             >
-              Open Account
-            </Link>
+              Open account
+            </a>
           </NeonCard>
         </Container>
       </main>

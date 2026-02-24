@@ -157,8 +157,8 @@
       }
 
       .left {
-        width: 480px;
-        min-width: 400px;
+        width: 720px;
+        min-width: 560px;
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
@@ -171,11 +171,212 @@
       .right {
         flex: 1;
         min-width: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .right-scroll {
+        flex: 1 0 auto;
+        min-height: 100%;
         display: flex;
         flex-direction: column;
         gap: 1.25rem;
         padding: 2rem 2.5rem;
-        overflow-y: auto;
+      }
+
+      .right-bottom {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: row;
+        gap: 1.25rem;
+      }
+
+      .right-qr {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 1rem;
+        padding: 1.25rem;
+        overflow: hidden;
+      }
+
+      .right-qr h3 {
+        margin: 0 0 0.75rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--color-text);
+      }
+
+      .right-qr-caption {
+        margin: 0 0 0.75rem;
+        font-size: 0.85rem;
+        color: var(--color-muted);
+        line-height: 1.4;
+      }
+
+      .right-qr-inner {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .right-qr-inner .qr-scaled {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        border-radius: 0.5rem;
+        border: 1px solid var(--color-border);
+        background: #fff;
+      }
+
+      .right-qr.muted { opacity: 0.7; }
+
+      .right-options-card {
+        flex: 0 0 auto;
+        width: 200px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 1rem;
+        padding: 1.25rem;
+        backdrop-filter: blur(18px);
+      }
+
+      .right-options-card h3 {
+        margin: 0 0 0.75rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--color-text);
+      }
+
+      .right-options-card .btn-block {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .right-options-card .btn-test-ok {
+        border-color: var(--ok);
+        background: rgba(46, 242, 162, 0.15);
+        color: var(--ok);
+      }
+
+      .right-options-card .btn-test-fail {
+        border-color: var(--bad);
+        background: rgba(248, 113, 113, 0.15);
+        color: var(--bad);
+      }
+
+      .external-url-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .external-url-row input {
+        flex: 1;
+        min-width: 0;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.65rem;
+        border: 1px solid var(--color-border);
+        background: rgba(0, 0, 0, 0.3);
+        color: var(--color-text);
+        font-size: 0.85rem;
+        font-family: inherit;
+      }
+
+      .external-url-row input::placeholder {
+        color: var(--color-muted);
+      }
+
+      .setup-instructions {
+        display: block;
+        margin-top: 1.25rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.65rem;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .setup-instructions summary {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--color-text);
+        cursor: pointer;
+        list-style: none;
+        gap: 0.5rem;
+      }
+
+      .setup-instructions summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .setup-instructions summary::after {
+        content: "";
+        margin-left: auto;
+        width: 0;
+        height: 0;
+        border-left: 0.35rem solid transparent;
+        border-right: 0.35rem solid transparent;
+        border-top: 0.4rem solid var(--color-muted);
+        transition: transform 0.2s ease;
+      }
+
+      .setup-instructions[open] summary::after {
+        transform: rotate(180deg);
+      }
+
+      .setup-instructions .instructions-body {
+        padding: 0.75rem 1rem 1rem;
+        font-size: 0.8rem;
+        color: var(--color-muted);
+        line-height: 1.5;
+        border-top: 1px solid var(--color-border);
+      }
+
+      .setup-instructions .instructions-body h4 {
+        margin: 0.75rem 0 0.35rem;
+        font-size: 0.8rem;
+        color: var(--color-text);
+      }
+
+      .setup-instructions .instructions-body h4:first-child {
+        margin-top: 0;
+      }
+
+      .setup-instructions .instructions-body ol,
+      .setup-instructions .instructions-body ul {
+        margin: 0.25rem 0 0 1rem;
+        padding: 0;
+      }
+
+      .setup-instructions .instructions-body code {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.85em;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 0.1em 0.35em;
+        border-radius: 0.25rem;
+      }
+
+      .setup-instructions .instructions-body a {
+        color: var(--color-text);
+        text-decoration: underline;
       }
 
       .card {
@@ -312,15 +513,53 @@
         border-bottom: 1px solid var(--color-border);
       }
 
-      .console pre {
+      .console-output {
         flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
+
+      .console pre {
         margin: 0;
         padding: 0.75rem 1rem;
-        overflow: auto;
         font-family: ui-monospace, Consolas, monospace;
         font-size: 0.875rem;
         line-height: 1.5;
         color: rgba(203, 218, 255, 0.92);
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+
+      .console-input-row {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.5rem 1rem;
+        border-top: 1px solid var(--color-border);
+        background: rgba(0, 0, 0, 0.25);
+      }
+
+      .console-prompt {
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.875rem;
+        color: var(--color-muted);
+        flex-shrink: 0;
+      }
+
+      .console-input {
+        flex: 1;
+        min-width: 0;
+        background: transparent;
+        border: none;
+        color: var(--color-text);
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.875rem;
+        outline: none;
+      }
+
+      .console-input::placeholder {
+        color: var(--color-muted);
+        opacity: 0.8;
       }
 
       .link-box {
@@ -372,9 +611,86 @@
         line-height: 1.4;
       }
 
-      @media (max-width: 1000px) {
-        .left { width: 400px; }
+      .check-server-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
       }
+
+      .check-server-row .check-status {
+        font-size: 0.8rem;
+        color: var(--color-muted);
+      }
+
+      .check-server-row .check-status.ok { color: var(--ok); }
+      .check-server-row .check-status.fail { color: var(--bad); }
+      .check-status.ok { color: var(--ok); }
+      .check-status.fail { color: var(--bad); }
+
+      @media (max-width: 1300px) {
+        .left { width: 560px; min-width: 480px; }
+      }
+
+      .view-setup { display: none; }
+      .view-setup.active { display: flex; }
+      .view-main { display: flex; }
+      .view-main.hidden { display: none; }
+
+      #setup-view {
+        position: fixed;
+        inset: 0;
+        top: var(--titlebar-h);
+        z-index: 20;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        background: var(--color-background);
+        overflow: auto;
+      }
+
+      #setup-view .setup-card {
+        max-width: 640px;
+        width: 100%;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 1rem;
+        padding: 1.5rem 2rem;
+        box-shadow: var(--shadow-soft);
+      }
+
+      #setup-view .setup-card h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-text);
+      }
+
+      #setup-view .setup-card p {
+        margin: 0 0 1.25rem;
+        font-size: 0.9rem;
+        color: var(--color-muted);
+        line-height: 1.5;
+      }
+
+      #setup-view .setup-console {
+        margin-top: 1rem;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1px solid var(--color-border);
+        border-radius: 0.75rem;
+        padding: 0.75rem 1rem;
+        max-height: 320px;
+        overflow: auto;
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: rgba(203, 218, 255, 0.92);
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+
+      #setup-view .setup-actions { margin-top: 1rem; }
     </style>
   </head>
   <body>
@@ -403,7 +719,18 @@
       </div>
     </header>
 
-    <div class="app">
+    <div id="setup-view" class="view-setup" aria-hidden="true">
+      <div class="setup-card">
+        <h2>Setup FunDeck Host</h2>
+        <p id="setup-message">Installing dependencies and building the join-website. This may take a few minutes. You need Node.js installed.</p>
+        <div class="setup-actions">
+          <button type="button" id="run-setup-btn" class="btn btn-primary">Run setup</button>
+        </div>
+        <pre id="setup-log" class="setup-console" aria-live="polite"></pre>
+      </div>
+    </div>
+
+    <div id="main-view" class="app view-main">
       <aside class="left">
         <section class="card" id="card-step1">
           <div class="step-num">1</div>
@@ -418,34 +745,89 @@
         </section>
         <div class="console">
           <div class="console-label">Console</div>
-          <pre id="log-output">Start the server to see activity.</pre>
+          <div class="console-output">
+            <pre id="log-output">Start the server to see activity.</pre>
+          </div>
+          <div class="console-input-row">
+            <span class="console-prompt" aria-hidden="true">&gt;</span>
+            <input type="text" id="console-input" class="console-input" placeholder="Type a command (e.g. clear)..." autocomplete="off" spellcheck="false" aria-label="Console input" />
+          </div>
         </div>
       </aside>
 
       <main class="right">
-        <header class="brand">
-          <h1>FunDeck Host</h1>
-          <p class="tagline">Host games on your computer. Friends join from their browser.</p>
-        </header>
+        <div class="right-scroll">
+          <header class="brand">
+            <h1>FunDeck Host</h1>
+            <p class="tagline">Host games on your computer. Friends join from their browser.</p>
+          </header>
 
-        <section class="card" id="card-step2">
-          <div class="step-num">2</div>
-          <h2>Share the link</h2>
-          <p>Anyone on the same Wi‑Fi can open this link to join. Send it in chat or show it on screen.</p>
-          <div class="link-box">
-            <span id="lan-url" class="url">Start the server to get a link</span>
-            <button type="button" id="copy-lan" class="btn">Copy link</button>
-          </div>
-        </section>
+          <section class="card" id="card-step2">
+            <h2>Share the link</h2>
+            <p>Anyone on the same Wi‑Fi can open this link to join. Send it in chat or copy the link.</p>
+            <div class="link-box">
+              <span id="lan-url" class="url">Start the server to get a link</span>
+              <button type="button" id="copy-lan" class="btn">Copy link</button>
+            </div>
+          </section>
 
-        <section class="card" id="card-step3">
-          <div class="step-num">3</div>
-          <h2>Create a room</h2>
-          <p>Open the host dashboard to pick a game and get a join link to share with everyone.</p>
-          <div class="card-actions">
-            <button type="button" id="open-dashboard" class="btn btn-primary">Open host dashboard</button>
-          </div>
-        </section>
+          <section class="card" id="card-step3">
+            <h2>Admin controls</h2>
+            <p>Open the host dashboard to create rooms, choose games, and start or stop games. Only this computer can act as host.</p>
+            <div class="card-actions">
+              <button type="button" id="open-dashboard" class="btn btn-primary">Open admin dashboard</button>
+            </div>
+          </section>
+
+          <section class="card" id="card-external">
+            <h2>External access (optional)</h2>
+            <p>Use ngrok or playit.gg so friends can join from the internet. Paste your tunnel URL below — the copy button and QR code will then use this link.</p>
+            <div class="external-url-row">
+              <input type="url" id="external-url-input" placeholder="https://xxxx.ngrok.io or your playit.gg URL" autocomplete="off" />
+              <button type="button" id="external-url-save" class="btn">Save</button>
+            </div>
+            <details class="setup-instructions">
+              <summary>How to set up external access</summary>
+              <div class="instructions-body">
+                <p><strong>FunDeck uses port 5250 (HTTP/TCP).</strong> When creating a tunnel, use TCP port 5250 or HTTP pointing to port 5250.</p>
+                <h4>Option 1: ngrok</h4>
+                <ol>
+                  <li>Install ngrok: <a href="https://ngrok.com/download" target="_blank" rel="noopener">ngrok.com/download</a></li>
+                  <li>Start your FunDeck server in this app (listening on TCP port 5250).</li>
+                  <li>In a terminal run: <code>ngrok http 5250</code> (exposes HTTP over TCP on 5250).</li>
+                  <li>Copy the <strong>https</strong> URL ngrok shows (e.g. <code>https://abc123.ngrok-free.app</code>).</li>
+                  <li>Paste it above and click Save. The QR code and copy button will use this URL.</li>
+                </ol>
+                <h4>Option 2: playit.gg</h4>
+                <ol>
+                  <li>Sign up at <a href="https://playit.gg" target="_blank" rel="noopener">playit.gg</a> and install the playit.gg agent.</li>
+                  <li>Start your FunDeck server in this app.</li>
+                  <li>In the playit.gg agent, add a tunnel: type <strong>TCP</strong> (or HTTP if available), port <strong>5250</strong>, target <strong>localhost:5250</strong>.</li>
+                  <li>Copy the public URL playit.gg gives you, paste it above, and click Save.</li>
+                </ol>
+                <p style="margin-top: 0.5rem;">Once saved, the <strong>Copy external link</strong> button appears and the <strong>QR code</strong> will open this URL so anyone can join from anywhere.</p>
+              </div>
+            </details>
+          </section>
+
+        <div class="right-bottom">
+          <section class="right-qr" id="qr-panel" aria-label="QR code to join">
+            <h3>QR code</h3>
+            <p id="qr-caption" class="right-qr-caption" hidden></p>
+            <div class="right-qr-inner" id="qr-inner">
+              <img id="qr-image" class="qr-scaled" src="" alt="QR code to join" hidden />
+            </div>
+          </section>
+
+          <section class="right-options-card">
+            <h3>Copy your IPs to send to friends</h3>
+            <button type="button" id="btn-local" class="btn btn-block">Local</button>
+            <button type="button" id="btn-lan" class="btn btn-block">LAN</button>
+            <button type="button" id="btn-external-join" class="btn btn-block" hidden>Copy external link</button>
+            <button type="button" id="btn-test-server" class="btn btn-block">Test server</button>
+          </section>
+        </div>
+        </div>
       </main>
     </div>
 

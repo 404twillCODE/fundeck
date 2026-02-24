@@ -491,6 +491,18 @@ async function bootstrap() {
     return socket.handshake.headers["x-forwarded-for"]?.split(",")[0]?.trim() || socket.handshake.address || "unknown";
   }
 
+  function isLocalIp(ip) {
+    if (!ip) return false;
+    const value = String(ip).toLowerCase();
+    if (value === "127.0.0.1" || value === "::1") return true;
+    if (value === "::ffff:127.0.0.1") return true;
+    if (value.startsWith("::ffff:")) {
+      const embedded = value.slice("::ffff:".length);
+      if (embedded === "127.0.0.1") return true;
+    }
+    return false;
+  }
+
   function isJoinRateLimited(ip) {
     const now = Date.now();
     const history = joinAttempts.get(ip) || [];
@@ -545,6 +557,10 @@ async function bootstrap() {
     devLog("socket:connected", { socketId: socket.id, ip, userId: socket.data.userId || null });
 
     socket.on("lobby:create_room", ({ gameId, name } = {}, callback) => {
+      if (!isLocalIp(ip)) {
+        callback?.({ error: "Only the host machine (localhost) can create rooms on this server." });
+        return;
+      }
       if (!socket.data.userId) {
         callback?.({ error: "Authentication required. Sign in from the Account page." });
         return;

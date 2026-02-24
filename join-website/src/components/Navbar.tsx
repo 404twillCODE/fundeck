@@ -10,7 +10,6 @@ import GradientText from "@/components/GradientText";
 
 const navLinks = [
   { label: "Games", href: "/" },
-  { label: "Host", href: "/host" },
   { label: "Leaderboards", href: "/leaderboards" },
   { label: "Account", href: "/account" },
 ] as Array<{ label: string; href: string; disabled?: boolean }>;

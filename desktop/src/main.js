@@ -16,11 +16,42 @@ let intentionallyStopping = false;
 let mainWindow = null;
 let dashboardWindow = null;
 
+const EXTERNAL_URL_FILE = "fundeck-external-url.txt";
+
+function getExternalUrlPath() {
+  return path.join(app.getPath("userData"), EXTERNAL_URL_FILE);
+}
+
+function loadExternalUrl() {
+  try {
+    const p = getExternalUrlPath();
+    if (fs.existsSync(p)) {
+      const s = fs.readFileSync(p, "utf8").trim();
+      if (s) return s;
+    }
+  } catch (e) {
+    /* ignore */
+  }
+  return "";
+}
+
+function saveExternalUrl(url) {
+  const u = String(url || "").trim();
+  try {
+    const p = getExternalUrlPath();
+    if (u) fs.writeFileSync(p, u, "utf8");
+    else if (fs.existsSync(p)) fs.unlinkSync(p);
+  } catch (e) {
+    /* ignore */
+  }
+}
+
 /** @type {{
  *  status: "stopped"|"starting"|"running"|"stopping"|"error";
  *  port: number | null;
  *  localUrl: string;
  *  lanUrl: string;
+ *  externalUrl: string;
  *  logs: string[];
  *  error: string | null;
  *  pid: number | null;
@@ -30,6 +61,7 @@ let state = {
   port: null,
   localUrl: "",
   lanUrl: "",
+  externalUrl: "",
   logs: [],
   error: null,
   pid: null,
@@ -137,6 +169,7 @@ function resolveRuntimePaths() {
   return {
     serverEntry: path.join(rootDir, "server", "src", "server.js"),
     nextAppDir: path.join(rootDir, "join-website"),
+    rootDir,
   };
 }
 
@@ -149,7 +182,7 @@ function ensureRuntimeFilesExist(serverEntry, nextAppDir) {
   }
   if (!fs.existsSync(nextBuildDir)) {
     throw new Error(
-      "Join-website not built. From repo root run: cd join-website && npm install && npm run build"
+      "Join-website not built. Run Setup from this app (see left panel) or from repo root: cd join-website && npm install && npm run build"
     );
   }
   if (!app.isPackaged) {
@@ -157,9 +190,128 @@ function ensureRuntimeFilesExist(serverEntry, nextAppDir) {
     const serverNodeModules = path.join(serverDir, "node_modules");
     if (!fs.existsSync(serverNodeModules)) {
       throw new Error(
-        "Server dependencies missing. From repo root run: cd server && npm install"
+        "Server dependencies missing. Run Setup from this app or from repo root: cd server && npm install"
       );
     }
+  }
+}
+
+/** @returns {{ setupNeeded: boolean; message?: string }} */
+function getSetupStatus() {
+  if (app.isPackaged) {
+    const paths = resolveRuntimePaths();
+    const bundleServer = path.join(process.resourcesPath, "bundle", "server", "src", "server.js");
+    const bundleWeb = path.join(process.resourcesPath, "bundle", "web", ".next");
+    const serverOk = fs.existsSync(bundleServer);
+    const webOk = fs.existsSync(bundleWeb);
+    if (!serverOk || !webOk) {
+      return {
+        setupNeeded: true,
+        message: "App bundle is missing. Please reinstall the app from the website.",
+      };
+    }
+    return { setupNeeded: false };
+  }
+  const rootDir = path.resolve(__dirname, "..", "..");
+  const serverDir = path.join(rootDir, "server");
+  const joinWebsiteDir = path.join(rootDir, "join-website");
+  const serverEntry = path.join(serverDir, "src", "server.js");
+  const serverNodeModules = path.join(serverDir, "node_modules");
+  const nextBuild = path.join(joinWebsiteDir, ".next");
+  if (!fs.existsSync(serverEntry)) {
+    return {
+      setupNeeded: true,
+      message: "Repo incomplete. Run this app from the FunDeck repo (desktop/ next to server/ and join-website/).",
+    };
+  }
+  if (!fs.existsSync(serverNodeModules)) {
+    return {
+      setupNeeded: true,
+      message: "Server dependencies not installed. Click Run setup below.",
+    };
+  }
+  if (!fs.existsSync(nextBuild)) {
+    return {
+      setupNeeded: true,
+      message: "Join-website not built. Click Run setup below.",
+    };
+  }
+  return { setupNeeded: false };
+}
+
+function sendSetupLog(line) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("host:setup-log", String(line || ""));
+  }
+}
+
+function sendSetupComplete(success, errorMessage) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("host:setup-complete", { success, error: errorMessage || null });
+  }
+}
+
+async function runSetup() {
+  if (app.isPackaged) {
+    sendSetupComplete(false, "Setup is not available in the installed app. Reinstall from the website.");
+    return;
+  }
+  const rootDir = path.resolve(__dirname, "..", "..");
+  const serverDir = path.join(rootDir, "server");
+  const joinWebsiteDir = path.join(rootDir, "join-website");
+  if (!fs.existsSync(path.join(serverDir, "package.json")) || !fs.existsSync(path.join(joinWebsiteDir, "package.json"))) {
+    sendSetupComplete(false, "Repo layout invalid: server/ and join-website/ must exist with package.json.");
+    return;
+  }
+  sendSetupLog("Starting setup…");
+  const run = (cmd, args, cwd, label) => {
+    return new Promise((resolve, reject) => {
+      sendSetupLog("");
+      sendSetupLog(`>>> ${label}`);
+      const child = spawn(cmd, args, {
+        cwd,
+        shell: process.platform === "win32",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let hadError = false;
+      child.stdout.on("data", (chunk) => {
+        String(chunk || "")
+          .replace(/\r/g, "")
+          .split("\n")
+          .forEach((line) => {
+            const t = line.trimEnd();
+            if (t) sendSetupLog(t);
+          });
+      });
+      child.stderr.on("data", (chunk) => {
+        hadError = true;
+        String(chunk || "")
+          .replace(/\r/g, "")
+          .split("\n")
+          .forEach((line) => {
+            const t = line.trimEnd();
+            if (t) sendSetupLog(t);
+          });
+      });
+      child.on("exit", (code) => {
+        if (code !== 0) reject(new Error(`${label} exited with code ${code}`));
+        else resolve();
+      });
+      child.on("error", (err) => reject(err));
+    });
+  };
+  try {
+    await run("npm", ["install"], serverDir, "server: npm install");
+    await run("npm", ["install"], joinWebsiteDir, "join-website: npm install");
+    await run("npm", ["run", "build"], joinWebsiteDir, "join-website: npm run build");
+    sendSetupLog("");
+    sendSetupLog("Setup finished successfully.");
+    sendSetupComplete(true);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    sendSetupLog("");
+    sendSetupLog(`Setup failed: ${msg}`);
+    sendSetupComplete(false, msg);
   }
 }
 
@@ -312,21 +464,51 @@ function openDashboard(embedded = false) {
       height: 800,
       title: "FunDeck Host Dashboard",
       autoHideMenuBar: true,
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        webSecurity: true,
+      },
     });
     dashboardWindow.on("closed", () => { dashboardWindow = null; });
+    dashboardWindow.once("ready-to-show", () => {
+      if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.show();
+    });
   }
   dashboardWindow.loadURL(targetUrl);
-  dashboardWindow.show();
+  if (!dashboardWindow.isDestroyed() && dashboardWindow.isVisible()) {
+    dashboardWindow.focus();
+  }
 }
 
 app.whenReady().then(async () => {
-  createMainWindow();
+  state.externalUrl = loadExternalUrl();
   updateState({
     port: DEFAULT_PORT,
     ...buildUrls(DEFAULT_PORT),
   });
 
   ipcMain.handle("host:get-state", () => state);
+  ipcMain.handle("host:get-setup-status", () => getSetupStatus());
+  ipcMain.handle("host:run-setup", async () => runSetup());
+  ipcMain.handle("host:check-server", async () => {
+    const port = state?.port;
+    if (port == null) return { ok: false };
+    return { ok: await checkHealth(port) };
+  });
+  ipcMain.handle("host:console-input", async (_event, line) => {
+    const text = String(line ?? "").trim();
+    if (!text) return;
+    const lower = text.toLowerCase();
+    if (lower === "clear" || lower === "cls") {
+      updateState({ logs: [] });
+      return;
+    }
+    updateState({
+      logs: [...state.logs, `> ${text}`].slice(-MAX_LOG_LINES),
+    });
+  });
   ipcMain.handle("host:start-server", async () => startServer());
   ipcMain.handle("host:stop-server", async () => stopServer());
   ipcMain.handle("host:open-dashboard", async (_event, embedded = false) => {
@@ -335,6 +517,17 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("host:copy-text", async (_event, text) => {
     clipboard.writeText(String(text || ""));
+    return true;
+  });
+  ipcMain.handle("host:open-url", async (_event, url) => {
+    if (url) shell.openExternal(String(url));
+    return true;
+  });
+  ipcMain.handle("host:set-external-url", async (_event, url) => {
+    const u = String(url ?? "").trim();
+    saveExternalUrl(u);
+    state.externalUrl = u;
+    broadcastState();
     return true;
   });
   ipcMain.on("window:close", () => mainWindow?.close());
@@ -346,15 +539,20 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
 
-  try {
-    await startServer();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    updateState({
-      status: "error",
-      error: message,
-      logs: [...state.logs, `Error: ${message}`].slice(-MAX_LOG_LINES),
-    });
+  createMainWindow();
+
+  const setupStatus = getSetupStatus();
+  if (!setupStatus.setupNeeded) {
+    try {
+      await startServer();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      updateState({
+        status: "error",
+        error: message,
+        logs: [...state.logs, `Error: ${message}`].slice(-MAX_LOG_LINES),
+      });
+    }
   }
 });
 
