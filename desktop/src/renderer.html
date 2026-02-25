@@ -16,6 +16,7 @@
         --color-border: rgba(255, 255, 255, 0.1);
         --color-text: #e7ebf4;
         --color-muted: #94a3b8;
+        --color-primary: #38bdf8;
         --gradient-primary: linear-gradient(90deg, #38bdf8, #2ef2a2, #a78bfa);
         --shadow-soft: 0 24px 80px rgba(5, 6, 10, 0.5);
         --ok: #2ef2a2;
@@ -23,812 +24,319 @@
         --warn: #fbbf24;
         --titlebar-h: 40px;
       }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; overflow: hidden; background: var(--color-background); color: var(--color-text); font-family: "Inter", system-ui, sans-serif; }
 
-      * { box-sizing: border-box; }
-
-      html, body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-        background: var(--color-background);
-        color: var(--color-text);
-        font-family: "Inter", system-ui, sans-serif;
-        position: relative;
-      }
-
-      #bg {
-        pointer-events: none;
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        overflow: hidden;
-      }
-      #bg .aurora-blob {
-        position: absolute;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, rgba(56, 189, 248, 0.25), rgba(167, 139, 250, 0.12), transparent 65%);
-        filter: blur(14px);
-        animation: aurora-float 28s ease-in-out infinite;
-      }
+      #bg { pointer-events: none; position: fixed; inset: 0; z-index: 0; overflow: hidden; }
+      #bg .aurora-blob { position: absolute; border-radius: 50%; background: radial-gradient(circle at 30% 30%, rgba(56, 189, 248, 0.25), rgba(167, 139, 250, 0.12), transparent 65%); filter: blur(14px); animation: aurora-float 28s ease-in-out infinite; }
       #bg .aurora-blob:nth-child(1) { left: -8rem; top: -15%; width: 380px; height: 380px; }
       #bg .aurora-blob:nth-child(2) { right: -10%; top: 25%; width: 400px; height: 400px; opacity: 0.5; }
       #bg .aurora-blob:nth-child(3) { bottom: -20%; left: 20%; width: 360px; height: 360px; opacity: 0.4; }
-      #bg .grid-overlay {
-        position: absolute;
-        inset: -72px;
-        background-image: linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
-        background-size: 72px 72px;
-        mask-image: radial-gradient(circle at top, rgba(0, 0, 0, 0.4), transparent);
-        animation: grid-pan 48s linear infinite;
-      }
-      #bg .noise-overlay {
-        position: absolute; inset: 0;
-        background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
-        mix-blend-mode: soft-light;
-        opacity: 0.5;
-      }
-      @keyframes aurora-float {
-        0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-        50% { transform: translate3d(-6%, 4%, 0) scale(1.06); }
-      }
-      @keyframes grid-pan {
-        0% { transform: translate3d(0, 0, 0); }
-        100% { transform: translate3d(-72px, -72px, 0); }
-      }
-
-      .titlebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: var(--titlebar-h);
-        z-index: 1000;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: rgba(5, 6, 10, 0.85);
-        border-bottom: 1px solid var(--color-border);
-        backdrop-filter: blur(12px);
-        -webkit-app-region: drag;
-      }
-
-      .titlebar-brand {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding-left: 1rem;
-        -webkit-app-region: no-drag;
-      }
-
-      .titlebar-brand span {
-        font-size: 0.95rem;
-        font-weight: 700;
-        background: var(--gradient-primary);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-      }
-
-      .titlebar-controls {
-        display: flex;
-        align-items: stretch;
-        height: 100%;
-        -webkit-app-region: no-drag;
-      }
-
-      .titlebar-btn {
-        width: 46px;
-        height: 100%;
-        border: none;
-        background: transparent;
-        color: var(--color-muted);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background 0.15s, color 0.15s;
-      }
-
-      .titlebar-btn:hover {
-        background: rgba(255, 255, 255, 0.08);
-        color: var(--color-text);
-      }
-
-      .titlebar-btn.close:hover {
-        background: #e81123;
-        color: #fff;
-      }
-
-      .titlebar-btn svg {
-        width: 12px;
-        height: 12px;
-      }
-
-      .app {
-        position: fixed;
-        top: var(--titlebar-h);
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 10;
-        display: flex;
-        overflow: hidden;
-      }
-
-      .left {
-        width: 720px;
-        min-width: 560px;
-        flex-shrink: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        padding: 1.25rem;
-        border-right: 1px solid var(--color-border);
-        background: rgba(0, 0, 0, 0.2);
-      }
-
-      .right {
-        flex: 1;
-        min-width: 0;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .right-scroll {
-        flex: 1 0 auto;
-        min-height: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 1.25rem;
-        padding: 2rem 2.5rem;
-      }
-
-      .right-bottom {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: row;
-        gap: 1.25rem;
-      }
-
-      .right-qr {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: 1rem;
-        padding: 1.25rem;
-        overflow: hidden;
-      }
-
-      .right-qr h3 {
-        margin: 0 0 0.75rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--color-text);
-      }
-
-      .right-qr-caption {
-        margin: 0 0 0.75rem;
-        font-size: 0.85rem;
-        color: var(--color-muted);
-        line-height: 1.4;
-      }
-
-      .right-qr-inner {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .right-qr-inner .qr-scaled {
-        max-width: 100%;
-        max-height: 100%;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-        border-radius: 0.5rem;
-        border: 1px solid var(--color-border);
-        background: #fff;
-      }
-
-      .right-qr.muted { opacity: 0.7; }
-
-      .right-options-card {
-        flex: 0 0 auto;
-        width: 200px;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: 1rem;
-        padding: 1.25rem;
-        backdrop-filter: blur(18px);
-      }
-
-      .right-options-card h3 {
-        margin: 0 0 0.75rem;
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--color-text);
-      }
-
-      .right-options-card .btn-block {
-        width: 100%;
-        justify-content: center;
-      }
-
-      .right-options-card .btn-test-ok {
-        border-color: var(--ok);
-        background: rgba(46, 242, 162, 0.15);
-        color: var(--ok);
-      }
-
-      .right-options-card .btn-test-fail {
-        border-color: var(--bad);
-        background: rgba(248, 113, 113, 0.15);
-        color: var(--bad);
-      }
-
-      .external-url-row {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-        margin-bottom: 0.25rem;
-      }
-
-      .external-url-row input {
-        flex: 1;
-        min-width: 0;
-        padding: 0.5rem 0.75rem;
-        border-radius: 0.65rem;
-        border: 1px solid var(--color-border);
-        background: rgba(0, 0, 0, 0.3);
-        color: var(--color-text);
-        font-size: 0.85rem;
-        font-family: inherit;
-      }
-
-      .external-url-row input::placeholder {
-        color: var(--color-muted);
-      }
-
-      .setup-instructions {
-        display: block;
-        margin-top: 1.25rem;
-        border: 1px solid var(--color-border);
-        border-radius: 0.65rem;
-        overflow: hidden;
-        background: rgba(0, 0, 0, 0.2);
-      }
-
-      .setup-instructions summary {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        box-sizing: border-box;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--color-text);
-        cursor: pointer;
-        list-style: none;
-        gap: 0.5rem;
-      }
-
-      .setup-instructions summary::-webkit-details-marker {
-        display: none;
-      }
-
-      .setup-instructions summary::after {
-        content: "";
-        margin-left: auto;
-        width: 0;
-        height: 0;
-        border-left: 0.35rem solid transparent;
-        border-right: 0.35rem solid transparent;
-        border-top: 0.4rem solid var(--color-muted);
-        transition: transform 0.2s ease;
-      }
-
-      .setup-instructions[open] summary::after {
-        transform: rotate(180deg);
-      }
-
-      .setup-instructions .instructions-body {
-        padding: 0.75rem 1rem 1rem;
-        font-size: 0.8rem;
-        color: var(--color-muted);
-        line-height: 1.5;
-        border-top: 1px solid var(--color-border);
-      }
-
-      .setup-instructions .instructions-body h4 {
-        margin: 0.75rem 0 0.35rem;
-        font-size: 0.8rem;
-        color: var(--color-text);
-      }
-
-      .setup-instructions .instructions-body h4:first-child {
-        margin-top: 0;
-      }
-
-      .setup-instructions .instructions-body ol,
-      .setup-instructions .instructions-body ul {
-        margin: 0.25rem 0 0 1rem;
-        padding: 0;
-      }
-
-      .setup-instructions .instructions-body code {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.85em;
-        background: rgba(0, 0, 0, 0.3);
-        padding: 0.1em 0.35em;
-        border-radius: 0.25rem;
-      }
-
-      .setup-instructions .instructions-body a {
-        color: var(--color-text);
-        text-decoration: underline;
-      }
-
-      .card {
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: 1rem;
-        padding: 1.25rem 1.5rem;
-        box-shadow: var(--shadow-soft);
-        backdrop-filter: blur(18px);
-      }
-
-      .card.muted { opacity: 0.7; }
-
-      .step-num {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1.5rem;
-        height: 1.5rem;
-        border-radius: 50%;
-        background: var(--color-surface-strong);
-        border: 1px solid var(--color-border);
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: var(--color-muted);
-        margin-bottom: 0.5rem;
-      }
-
-      .card h2 {
-        margin: 0 0 0.25rem;
-        font-size: 1rem;
-        font-weight: 600;
-        color: var(--color-text);
-      }
-
-      .card p {
-        margin: 0;
-        font-size: 0.8rem;
-        color: var(--color-muted);
-        line-height: 1.45;
-      }
-
-      .card-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-      }
-
-      .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.35rem 0.65rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-      }
-
-      .status-pill::before {
-        content: "";
-        width: 5px;
-        height: 5px;
-        border-radius: 50%;
-        background: currentColor;
-      }
-
-      .status-pill.stopped { color: var(--bad); background: rgba(248, 113, 113, 0.15); }
-      .status-pill.starting, .status-pill.stopping { color: var(--warn); background: rgba(251, 191, 36, 0.15); }
-      .status-pill.running { color: var(--ok); background: rgba(46, 242, 162, 0.15); }
-      .status-pill.error { color: var(--bad); background: rgba(248, 113, 113, 0.15); }
-
-      .btn {
-        border: 1px solid var(--color-border);
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--color-text);
-        padding: 0.5rem 1rem;
-        border-radius: 0.65rem;
-        cursor: pointer;
-        font-weight: 600;
-        font-size: 0.85rem;
-        font-family: inherit;
-        transition: border-color 0.2s, background 0.2s, opacity 0.2s;
-      }
-
-      .btn:hover:not(:disabled) {
-        border-color: rgba(255, 255, 255, 0.2);
-        background: rgba(255, 255, 255, 0.1);
-      }
-
-      .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-      .btn-primary {
-        background: var(--gradient-primary);
-        color: #041017;
-        border: none;
-      }
-
-      .btn-primary:hover:not(:disabled) {
-        opacity: 0.95;
-        filter: brightness(1.05);
-      }
-
-      .error-banner {
-        margin-top: 0.75rem;
-        padding: 0.6rem 0.85rem;
-        background: rgba(248, 113, 113, 0.12);
-        border: 1px solid rgba(248, 113, 113, 0.35);
-        border-radius: 0.5rem;
-        font-size: 0.8rem;
-        color: #fca5a5;
-        line-height: 1.4;
-      }
-
-      .console {
-        flex: 1;
-        min-height: 0;
-        margin-top: 1rem;
-        display: flex;
-        flex-direction: column;
-        background: rgba(0, 0, 0, 0.45);
-        border: 1px solid var(--color-border);
-        border-radius: 0.75rem;
-        overflow: hidden;
-      }
-
-      .console-label {
-        padding: 0.4rem 0.75rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--color-muted);
-        border-bottom: 1px solid var(--color-border);
-      }
-
-      .console-output {
-        flex: 1;
-        min-height: 0;
-        overflow: auto;
-      }
-
-      .console pre {
-        margin: 0;
-        padding: 0.75rem 1rem;
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.875rem;
-        line-height: 1.5;
-        color: rgba(203, 218, 255, 0.92);
-        white-space: pre-wrap;
-        word-break: break-all;
-      }
-
-      .console-input-row {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        padding: 0.5rem 1rem;
-        border-top: 1px solid var(--color-border);
-        background: rgba(0, 0, 0, 0.25);
-      }
-
-      .console-prompt {
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.875rem;
-        color: var(--color-muted);
-        flex-shrink: 0;
-      }
-
-      .console-input {
-        flex: 1;
-        min-width: 0;
-        background: transparent;
-        border: none;
-        color: var(--color-text);
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.875rem;
-        outline: none;
-      }
-
-      .console-input::placeholder {
-        color: var(--color-muted);
-        opacity: 0.8;
-      }
-
-      .link-box {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.65rem 0.9rem;
-        background: rgba(0, 0, 0, 0.3);
-        border: 1px solid var(--color-border);
-        border-radius: 0.65rem;
-        margin-top: 0.75rem;
-      }
-
-      .link-box .url {
-        flex: 1;
-        min-width: 0;
-        font-size: 0.8rem;
-        color: var(--color-text);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .link-box .btn.copied {
-        background: rgba(46, 242, 162, 0.2);
-        border-color: var(--ok);
-        color: var(--ok);
-      }
-
-      .brand {
-        margin-bottom: 0.5rem;
-      }
-
-      .brand h1 {
-        margin: 0;
-        font-size: 1.35rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        background: var(--gradient-primary);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-      }
-
-      .tagline {
-        margin: 0.35rem 0 0;
-        font-size: 0.85rem;
-        color: var(--color-muted);
-        line-height: 1.4;
-      }
-
-      .check-server-row {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        margin-top: 0.75rem;
-      }
-
-      .check-server-row .check-status {
-        font-size: 0.8rem;
-        color: var(--color-muted);
-      }
-
-      .check-server-row .check-status.ok { color: var(--ok); }
-      .check-server-row .check-status.fail { color: var(--bad); }
-      .check-status.ok { color: var(--ok); }
-      .check-status.fail { color: var(--bad); }
-
-      @media (max-width: 1300px) {
-        .left { width: 560px; min-width: 480px; }
-      }
-
-      .view-setup { display: none; }
-      .view-setup.active { display: flex; }
-      .view-main { display: flex; }
-      .view-main.hidden { display: none; }
-
-      #setup-view {
-        position: fixed;
-        inset: 0;
-        top: var(--titlebar-h);
-        z-index: 20;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-        background: var(--color-background);
-        overflow: auto;
-      }
-
-      #setup-view .setup-card {
-        max-width: 640px;
-        width: 100%;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: 1rem;
-        padding: 1.5rem 2rem;
-        box-shadow: var(--shadow-soft);
-      }
-
-      #setup-view .setup-card h2 {
-        margin: 0 0 0.5rem;
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: var(--color-text);
-      }
-
-      #setup-view .setup-card p {
-        margin: 0 0 1.25rem;
-        font-size: 0.9rem;
-        color: var(--color-muted);
-        line-height: 1.5;
-      }
-
-      #setup-view .setup-console {
-        margin-top: 1rem;
-        background: rgba(0, 0, 0, 0.45);
-        border: 1px solid var(--color-border);
-        border-radius: 0.75rem;
-        padding: 0.75rem 1rem;
-        max-height: 320px;
-        overflow: auto;
-        font-family: ui-monospace, Consolas, monospace;
-        font-size: 0.8rem;
-        line-height: 1.5;
-        color: rgba(203, 218, 255, 0.92);
-        white-space: pre-wrap;
-        word-break: break-all;
-      }
-
-      #setup-view .setup-actions { margin-top: 1rem; }
+      #bg .grid-overlay { position: absolute; inset: -72px; background-image: linear-gradient(rgba(148,163,184,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.05) 1px, transparent 1px); background-size: 72px 72px; mask-image: radial-gradient(circle at top, rgba(0,0,0,0.4), transparent); animation: grid-pan 48s linear infinite; }
+      #bg .noise-overlay { position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"); mix-blend-mode: soft-light; opacity: 0.5; }
+      @keyframes aurora-float { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(-6%,4%,0) scale(1.06)} }
+      @keyframes grid-pan { 0%{transform:translate3d(0,0,0)} 100%{transform:translate3d(-72px,-72px,0)} }
+
+      .titlebar { position:fixed; top:0; left:0; right:0; height:var(--titlebar-h); z-index:1000; display:flex; align-items:center; justify-content:space-between; background:rgba(5,6,10,0.85); border-bottom:1px solid var(--color-border); backdrop-filter:blur(12px); -webkit-app-region:drag; }
+      .titlebar-brand { display:flex; align-items:center; gap:0.5rem; padding-left:1rem; -webkit-app-region:no-drag; }
+      .titlebar-brand span { font-size:0.95rem; font-weight:700; background:var(--gradient-primary); -webkit-background-clip:text; background-clip:text; color:transparent; }
+      .titlebar-controls { display:flex; align-items:stretch; height:100%; -webkit-app-region:no-drag; }
+      .titlebar-btn { width:46px; height:100%; border:none; background:transparent; color:var(--color-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.15s,color 0.15s; }
+      .titlebar-btn:hover { background:rgba(255,255,255,0.08); color:var(--color-text); }
+      .titlebar-btn.close:hover { background:#e81123; color:#fff; }
+      .titlebar-btn svg { width:12px; height:12px; }
+
+      .app { position:fixed; top:var(--titlebar-h); left:0; right:0; bottom:0; z-index:10; display:flex; overflow:hidden; }
+
+      /* Sidebar nav */
+      .sidebar { width:200px; flex-shrink:0; display:flex; flex-direction:column; gap:0.25rem; padding:0.75rem; border-right:1px solid var(--color-border); background:rgba(0,0,0,0.25); }
+      .sidebar-btn { display:flex; align-items:center; gap:0.5rem; padding:0.6rem 0.75rem; border-radius:0.5rem; border:none; background:transparent; color:var(--color-muted); font-family:inherit; font-size:0.8rem; font-weight:600; cursor:pointer; transition:background 0.15s,color 0.15s; text-align:left; }
+      .sidebar-btn:hover { background:rgba(255,255,255,0.06); color:var(--color-text); }
+      .sidebar-btn.active { background:rgba(255,255,255,0.1); color:var(--color-text); }
+      .sidebar-btn svg { width:16px; height:16px; flex-shrink:0; }
+      .sidebar-spacer { flex:1; }
+      .sidebar-user { padding:0.5rem 0.75rem; font-size:0.7rem; color:var(--color-muted); border-top:1px solid var(--color-border); margin-top:0.5rem; }
+      .sidebar-user strong { color:var(--color-text); display:block; font-size:0.8rem; margin-bottom:2px; }
+
+      /* Tab content */
+      .tab-content { flex:1; min-width:0; overflow:hidden; display:none; flex-direction:column; }
+      .tab-content.active { display:flex; }
+
+      /* Generic panel */
+      .panel { flex:1; overflow-y:auto; padding:1.5rem 2rem; }
+      .panel-section { background:var(--color-surface); border:1px solid var(--color-border); border-radius:0.75rem; padding:1.25rem; margin-bottom:1rem; backdrop-filter:blur(18px); }
+      .panel-section h2 { font-size:1rem; font-weight:600; margin-bottom:0.5rem; }
+      .panel-section p { font-size:0.8rem; color:var(--color-muted); line-height:1.45; }
+      .panel-section h3 { font-size:0.85rem; font-weight:600; color:var(--color-text); margin:0.75rem 0 0.35rem; }
+
+      .btn { border:1px solid var(--color-border); background:rgba(255,255,255,0.06); color:var(--color-text); padding:0.45rem 0.85rem; border-radius:0.5rem; cursor:pointer; font-weight:600; font-size:0.8rem; font-family:inherit; transition:border-color 0.2s,background 0.2s,opacity 0.2s; }
+      .btn:hover:not(:disabled) { border-color:rgba(255,255,255,0.2); background:rgba(255,255,255,0.1); }
+      .btn:disabled { opacity:0.5; cursor:not-allowed; }
+      .btn-primary { background:var(--gradient-primary); color:#041017; border:none; }
+      .btn-primary:hover:not(:disabled) { opacity:0.95; filter:brightness(1.05); }
+      .btn-sm { padding:0.3rem 0.6rem; font-size:0.7rem; }
+      .btn-danger { background:rgba(248,113,113,0.15); border-color:rgba(248,113,113,0.4); color:#fca5a5; }
+      .btn-danger:hover:not(:disabled) { background:rgba(248,113,113,0.25); }
+      .btn-warn { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fde68a; }
+
+      .status-pill { display:inline-flex; align-items:center; gap:0.35rem; padding:0.3rem 0.6rem; border-radius:999px; font-size:0.7rem; font-weight:600; }
+      .status-pill::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
+      .status-pill.stopped { color:var(--bad); background:rgba(248,113,113,0.15); }
+      .status-pill.starting,.status-pill.stopping { color:var(--warn); background:rgba(251,191,36,0.15); }
+      .status-pill.running { color:var(--ok); background:rgba(46,242,162,0.15); }
+      .status-pill.error { color:var(--bad); background:rgba(248,113,113,0.15); }
+
+      .error-banner { padding:0.5rem 0.75rem; background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.35); border-radius:0.5rem; font-size:0.8rem; color:#fca5a5; margin-top:0.5rem; }
+      .success-banner { padding:0.5rem 0.75rem; background:rgba(46,242,162,0.12); border:1px solid rgba(46,242,162,0.35); border-radius:0.5rem; font-size:0.8rem; color:var(--ok); margin-top:0.5rem; }
+
+      .input { width:100%; padding:0.5rem 0.75rem; border-radius:0.5rem; border:1px solid var(--color-border); background:rgba(0,0,0,0.3); color:var(--color-text); font-size:0.85rem; font-family:inherit; outline:none; transition:border-color 0.2s; }
+      .input:focus { border-color:rgba(255,255,255,0.25); }
+      .input::placeholder { color:var(--color-muted); }
+      .input-label { display:block; font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--color-muted); margin-bottom:0.35rem; }
+      .form-row { margin-bottom:0.75rem; }
+      .flex-row { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
+      .flex-row > .btn { flex-shrink:0; }
+
+      /* Console */
+      .console { flex:1; min-height:0; display:flex; flex-direction:column; background:rgba(0,0,0,0.45); border:1px solid var(--color-border); border-radius:0.75rem; overflow:hidden; margin-top:0.75rem; }
+      .console-header { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.25rem 0.5rem 0.25rem 0.75rem; border-bottom:1px solid var(--color-border); }
+      .console-label { font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--color-muted); }
+      .console-output { flex:1; min-height:0; overflow:auto; }
+      .console pre { margin:0; padding:0.5rem 0.75rem; font-family:ui-monospace,Consolas,monospace; font-size:0.8rem; line-height:1.5; color:rgba(203,218,255,0.92); white-space:pre-wrap; word-break:break-all; }
+      .console-input-row { display:flex; align-items:center; gap:0.25rem; padding:0.4rem 0.75rem; border-top:1px solid var(--color-border); background:rgba(0,0,0,0.25); }
+      .console-prompt { font-family:ui-monospace,Consolas,monospace; font-size:0.8rem; color:var(--color-muted); }
+      .console-input { flex:1; min-width:0; background:transparent; border:none; color:var(--color-text); font-family:ui-monospace,Consolas,monospace; font-size:0.8rem; outline:none; }
+
+      /* Games grid — website-style neon cards */
+      .games-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:1rem; padding-bottom:1rem; }
+      .game-card {
+        position:relative; display:flex; flex-direction:column; justify-content:space-between;
+        background:rgba(255,255,255,0.04); border:1px solid var(--color-border); border-radius:1rem;
+        padding:1.25rem; overflow:hidden; transition:border-color 0.25s, transform 0.2s;
+        box-shadow:0 24px 80px rgba(5,6,10,0.65); backdrop-filter:blur(18px);
+      }
+      .game-card:hover { border-color:rgba(255,255,255,0.2); transform:translateY(-3px); }
+      .game-card.wip { opacity:0.85; }
+      .game-card-icon { width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:0.75rem; border:1px solid var(--color-border); background:rgba(255,255,255,0.08); color:var(--color-primary); margin-bottom:0.75rem; font-size:1.2rem; }
+      .game-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:0.5rem; }
+      .game-card-name { font-size:1.1rem; font-weight:600; color:var(--color-text); }
+      .game-card-desc { font-size:0.8rem; color:var(--color-muted); margin-top:0.35rem; line-height:1.5; }
+      .game-card-footer { display:flex; align-items:center; justify-content:space-between; margin-top:1rem; }
+      .game-card-cat { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.12em; color:var(--color-muted); background:var(--color-surface-strong); padding:0.25rem 0.6rem; border-radius:999px; border:1px solid var(--color-border); font-weight:600; }
+      .game-card-status { font-size:0.6rem; text-transform:uppercase; letter-spacing:0.12em; font-weight:600; }
+      .game-card-status.live { color:var(--ok); }
+      .game-card-status.wip { color:var(--warn); }
+      .game-card .btn-play {
+        padding:0.5rem 1.25rem; border-radius:999px; font-size:0.75rem; font-weight:700;
+        text-transform:uppercase; letter-spacing:0.2em; border:1px solid var(--color-border);
+        background:rgba(255,255,255,0.08); color:var(--color-text); cursor:pointer;
+        transition:background 0.2s, transform 0.15s; font-family:inherit;
+      }
+      .game-card .btn-play:hover:not(:disabled) { background:rgba(255,255,255,0.14); transform:translateY(-1px); }
+      .game-card .btn-play.btn-play-primary {
+        background:var(--gradient-primary); color:#041017; border:none;
+        animation:glow-pulse 3s ease-in-out infinite;
+      }
+      .game-card .btn-play:disabled { opacity:0.4; cursor:not-allowed; }
+      @keyframes glow-pulse {
+        0%,100% { box-shadow:0 0 20px rgba(56,189,248,0.3),0 0 40px rgba(167,139,250,0.2); }
+        50% { box-shadow:0 0 28px rgba(46,242,162,0.45),0 0 55px rgba(56,189,248,0.25); }
+      }
+
+      /* Player list */
+      .player-row { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; border:1px solid var(--color-border); border-radius:0.5rem; margin-bottom:0.35rem; background:rgba(0,0,0,0.15); }
+      .player-row .player-name { flex:1; font-size:0.85rem; font-weight:600; }
+      .player-row .player-balance { font-size:0.75rem; color:var(--color-muted); min-width:80px; text-align:right; }
+      .player-row .player-status { font-size:0.65rem; text-transform:uppercase; letter-spacing:0.05em; margin-left:0.5rem; }
+      .player-row .player-status.connected { color:var(--ok); }
+      .player-row .player-status.disconnected { color:var(--bad); }
+      .player-actions { display:flex; gap:0.25rem; margin-left:0.5rem; }
+
+      /* Room management header + QR */
+      .room-management-header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.5rem; }
+      .room-management-header h2 { margin-bottom:0; }
+      .host-join-qr { flex-shrink:0; width:160px; height:160px; border:1px solid var(--color-border); border-radius:0.75rem; background:rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+      .host-join-qr img { width:100%; height:100%; object-fit:contain; }
+      .host-join-qr.empty { display:none; }
+
+      /* QR + link section */
+      .link-box { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--color-border); border-radius:0.5rem; margin-top:0.5rem; max-width:480px; }
+      .link-box .url { flex:1; font-size:0.75rem; color:var(--color-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .link-box .btn.copied { background:rgba(46,242,162,0.2); border-color:var(--ok); color:var(--ok); }
+
+      .external-url-row { display:flex; gap:0.5rem; margin-top:0.5rem; }
+      .external-url-row input { flex:1; min-width:0; }
+
+      .setup-view { display:none; position:fixed; inset:0; top:var(--titlebar-h); z-index:20; flex-direction:column; align-items:center; justify-content:center; padding:2rem; background:var(--color-background); overflow:auto; }
+      .setup-view.active { display:flex; }
+      .setup-card { max-width:640px; width:100%; background:var(--color-surface); border:1px solid var(--color-border); border-radius:1rem; padding:1.5rem 2rem; }
+      .setup-card h2 { font-size:1.25rem; font-weight:600; margin-bottom:0.5rem; }
+      .setup-card p { font-size:0.9rem; color:var(--color-muted); line-height:1.5; margin-bottom:1rem; }
+      .setup-console { margin-top:1rem; background:rgba(0,0,0,0.45); border:1px solid var(--color-border); border-radius:0.75rem; padding:0.75rem 1rem; max-height:320px; overflow:auto; font-family:ui-monospace,Consolas,monospace; font-size:0.8rem; line-height:1.5; color:rgba(203,218,255,0.92); white-space:pre-wrap; word-break:break-all; }
+
+      /* Balance input inline */
+      .balance-input { width:80px; padding:0.2rem 0.4rem; font-size:0.75rem; }
     </style>
   </head>
   <body>
     <div id="bg" aria-hidden="true">
-      <div class="aurora-blob"></div>
-      <div class="aurora-blob"></div>
-      <div class="aurora-blob"></div>
-      <div class="grid-overlay"></div>
-      <div class="noise-overlay"></div>
+      <div class="aurora-blob"></div><div class="aurora-blob"></div><div class="aurora-blob"></div>
+      <div class="grid-overlay"></div><div class="noise-overlay"></div>
     </div>
 
     <header class="titlebar">
-      <div class="titlebar-brand">
-        <span>FunDeck Host</span>
-      </div>
+      <div class="titlebar-brand"><span>FunDeck Host</span></div>
       <div class="titlebar-controls">
-        <button type="button" class="titlebar-btn" id="btn-minimize" title="Minimize" aria-label="Minimize">
-          <svg viewBox="0 0 12 12"><rect x="0" y="5" width="12" height="1" fill="currentColor"/></svg>
-        </button>
-        <button type="button" class="titlebar-btn" id="btn-maximize" title="Maximize" aria-label="Maximize">
-          <svg viewBox="0 0 12 12"><rect x="0" y="0" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1"/></svg>
-        </button>
-        <button type="button" class="titlebar-btn close" id="btn-close" title="Close" aria-label="Close">
-          <svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
-        </button>
+        <button type="button" class="titlebar-btn" id="btn-minimize" title="Minimize"><svg viewBox="0 0 12 12"><rect x="0" y="5" width="12" height="1" fill="currentColor"/></svg></button>
+        <button type="button" class="titlebar-btn" id="btn-maximize" title="Maximize"><svg viewBox="0 0 12 12"><rect x="0" y="0" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
+        <button type="button" class="titlebar-btn close" id="btn-close" title="Close"><svg viewBox="0 0 12 12"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></button>
       </div>
     </header>
 
-    <div id="setup-view" class="view-setup" aria-hidden="true">
+    <div id="setup-view" class="setup-view" aria-hidden="true">
       <div class="setup-card">
         <h2>Setup FunDeck Host</h2>
-        <p id="setup-message">Installing dependencies and building the join-website. This may take a few minutes. You need Node.js installed.</p>
-        <div class="setup-actions">
-          <button type="button" id="run-setup-btn" class="btn btn-primary">Run setup</button>
-        </div>
+        <p id="setup-message">Installing dependencies and building. This may take a few minutes.</p>
+        <div><button type="button" id="run-setup-btn" class="btn btn-primary">Run setup</button></div>
         <pre id="setup-log" class="setup-console" aria-live="polite"></pre>
       </div>
     </div>
 
-    <div id="main-view" class="app view-main">
-      <aside class="left">
-        <section class="card" id="card-step1">
-          <div class="step-num">1</div>
-          <h2>Start the server</h2>
-          <p>Your games run on this PC. Keep this app open while you play.</p>
-          <div id="error-banner" class="error-banner" role="alert" hidden></div>
-          <div class="card-actions">
-            <button type="button" id="start-server" class="btn btn-primary">Start server</button>
-            <button type="button" id="stop-server" class="btn">Stop server</button>
-            <span id="status-pill" class="status-pill stopped">Stopped</span>
-          </div>
-        </section>
-        <div class="console">
-          <div class="console-label">Console</div>
-          <div class="console-output">
-            <pre id="log-output">Start the server to see activity.</pre>
-          </div>
-          <div class="console-input-row">
-            <span class="console-prompt" aria-hidden="true">&gt;</span>
-            <input type="text" id="console-input" class="console-input" placeholder="Type a command (e.g. clear)..." autocomplete="off" spellcheck="false" aria-label="Console input" />
-          </div>
+    <div id="main-view" class="app">
+      <nav class="sidebar">
+        <button type="button" class="sidebar-btn active" data-tab="tab-server">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Server
+        </button>
+        <button type="button" class="sidebar-btn" data-tab="tab-host">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Host Dashboard
+        </button>
+        <button type="button" class="sidebar-btn" data-tab="tab-games">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01M8 12V9m0 6v-3m4-1h4"/></svg>
+          Games
+        </button>
+        <div class="sidebar-spacer"></div>
+        <div class="sidebar-user" id="sidebar-user" hidden>
+          <strong id="sidebar-username"></strong>
+          <span id="sidebar-email"></span>
         </div>
-      </aside>
+      </nav>
 
-      <main class="right">
-        <div class="right-scroll">
-          <header class="brand">
-            <h1>FunDeck Host</h1>
-            <p class="tagline">Host games on your computer. Friends join from their browser.</p>
-          </header>
-
-          <section class="card" id="card-step2">
-            <h2>Share the link</h2>
-            <p>Anyone on the same Wi‑Fi can open this link to join. Send it in chat or copy the link.</p>
+      <!-- SERVER TAB -->
+      <div class="tab-content active" id="tab-server">
+        <div class="panel" style="display:flex;flex-direction:column;height:100%;">
+          <div class="panel-section">
+            <h2>Server Control</h2>
+            <p>Your games run on this PC. Keep this app open while you play.</p>
+            <div id="error-banner" class="error-banner" hidden></div>
+            <div class="flex-row" style="margin-top:0.5rem;">
+              <button type="button" id="start-server" class="btn btn-primary">Start server</button>
+              <button type="button" id="stop-server" class="btn">Stop server</button>
+              <span id="status-pill" class="status-pill stopped">Stopped</span>
+            </div>
+          </div>
+          <div class="panel-section">
+            <h2>Share Link</h2>
             <div class="link-box">
               <span id="lan-url" class="url">Start the server to get a link</span>
-              <button type="button" id="copy-lan" class="btn">Copy link</button>
+              <button type="button" id="copy-lan" class="btn btn-sm">Copy</button>
             </div>
-          </section>
-
-          <section class="card" id="card-step3">
-            <h2>Admin controls</h2>
-            <p>Open the host dashboard to create rooms, choose games, and start or stop games. Only this computer can act as host.</p>
-            <div class="card-actions">
-              <button type="button" id="open-dashboard" class="btn btn-primary">Open admin dashboard</button>
-            </div>
-          </section>
-
-          <section class="card" id="card-external">
-            <h2>External access (optional)</h2>
-            <p>Use ngrok or playit.gg so friends can join from the internet. Paste your tunnel URL below — the copy button and QR code will then use this link.</p>
             <div class="external-url-row">
-              <input type="url" id="external-url-input" placeholder="https://xxxx.ngrok.io or your playit.gg URL" autocomplete="off" />
-              <button type="button" id="external-url-save" class="btn">Save</button>
+              <input type="url" id="external-url-input" class="input" placeholder="External URL (ngrok / playit.gg)" autocomplete="off" />
+              <button type="button" id="external-url-save" class="btn btn-sm">Save</button>
             </div>
-            <details class="setup-instructions">
-              <summary>How to set up external access</summary>
-              <div class="instructions-body">
-                <p><strong>FunDeck uses port 5250 (HTTP/TCP).</strong> When creating a tunnel, use TCP port 5250 or HTTP pointing to port 5250.</p>
-                <h4>Option 1: ngrok</h4>
-                <ol>
-                  <li>Install ngrok: <a href="https://ngrok.com/download" target="_blank" rel="noopener">ngrok.com/download</a></li>
-                  <li>Start your FunDeck server in this app (listening on TCP port 5250).</li>
-                  <li>In a terminal run: <code>ngrok http 5250</code> (exposes HTTP over TCP on 5250).</li>
-                  <li>Copy the <strong>https</strong> URL ngrok shows (e.g. <code>https://abc123.ngrok-free.app</code>).</li>
-                  <li>Paste it above and click Save. The QR code and copy button will use this URL.</li>
-                </ol>
-                <h4>Option 2: playit.gg</h4>
-                <ol>
-                  <li>Sign up at <a href="https://playit.gg" target="_blank" rel="noopener">playit.gg</a> and install the playit.gg agent.</li>
-                  <li>Start your FunDeck server in this app.</li>
-                  <li>In the playit.gg agent, add a tunnel: type <strong>TCP</strong> (or HTTP if available), port <strong>5250</strong>, target <strong>localhost:5250</strong>.</li>
-                  <li>Copy the public URL playit.gg gives you, paste it above, and click Save.</li>
-                </ol>
-                <p style="margin-top: 0.5rem;">Once saved, the <strong>Copy external link</strong> button appears and the <strong>QR code</strong> will open this URL so anyone can join from anywhere.</p>
+          </div>
+          <div class="console">
+            <div class="console-header">
+              <span class="console-label">Console</span>
+              <button type="button" id="copy-console" class="btn btn-sm">Copy</button>
+            </div>
+            <div class="console-output">
+              <pre id="log-output">Start the server to see activity.</pre>
+            </div>
+            <div class="console-input-row">
+              <span class="console-prompt">&gt;</span>
+              <input type="text" id="console-input" class="console-input" placeholder="Type a command..." autocomplete="off" spellcheck="false" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOST DASHBOARD TAB -->
+      <div class="tab-content" id="tab-host">
+        <div class="panel">
+          <!-- Auth section (shown when not logged in) -->
+          <div id="host-auth" class="panel-section">
+            <h2>Sign In to Host</h2>
+            <p>Create or sign into a local account to manage games.</p>
+            <div class="flex-row" style="margin-bottom:0.5rem;">
+              <button type="button" class="btn btn-sm" id="auth-tab-signin" style="opacity:0.5">Sign In</button>
+              <button type="button" class="btn btn-sm" id="auth-tab-signup">Register</button>
+            </div>
+            <div class="form-row"><label class="input-label">Email</label><input type="email" id="auth-email" class="input" placeholder="you@example.com" /></div>
+            <div class="form-row" id="auth-name-row"><label class="input-label">Display Name</label><input type="text" id="auth-name" class="input" placeholder="Player name" /></div>
+            <div class="form-row"><label class="input-label">Password</label><input type="password" id="auth-password" class="input" placeholder="At least 8 characters" /></div>
+            <div id="auth-error" class="error-banner" hidden></div>
+            <button type="button" id="auth-submit" class="btn btn-primary" style="margin-top:0.5rem;">Create Account</button>
+          </div>
+
+          <!-- Host panel (shown when logged in) -->
+          <div id="host-panel" hidden>
+            <div class="panel-section">
+              <h2>Room Management</h2>
+              <div id="host-no-room">
+                <p>No room active. Head to the <strong>Games</strong> tab to pick a game and create a room.</p>
+                <button type="button" id="host-go-games" class="btn" style="margin-top:0.5rem;">Open Games</button>
+                <div id="host-create-error" class="error-banner" hidden></div>
               </div>
-            </details>
-          </section>
-
-        <div class="right-bottom">
-          <section class="right-qr" id="qr-panel" aria-label="QR code to join">
-            <h3>QR code</h3>
-            <p id="qr-caption" class="right-qr-caption" hidden></p>
-            <div class="right-qr-inner" id="qr-inner">
-              <img id="qr-image" class="qr-scaled" src="" alt="QR code to join" hidden />
+              <div id="host-active-room" hidden>
+                <div class="room-management-header">
+                  <div style="flex:1;min-width:0;">
+                    <div class="flex-row" style="margin-bottom:0.5rem;">
+                      <span style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--color-muted);">Room Code</span>
+                      <strong id="host-room-code" style="font-size:1.5rem;letter-spacing:0.2em;color:var(--ok);"></strong>
+                      <span id="host-room-phase" class="status-pill running"></span>
+                    </div>
+                    <div class="link-box">
+                      <span id="host-join-url" class="url"></span>
+                      <button type="button" id="host-copy-join" class="btn btn-sm">Copy</button>
+                    </div>
+                    <div class="flex-row" style="margin-top:0.75rem;">
+                      <select id="host-game-select" class="input" style="width:auto;min-width:140px;"></select>
+                      <button type="button" id="host-set-game" class="btn btn-sm">Change Game</button>
+                      <button type="button" id="host-start-game" class="btn btn-primary btn-sm">Start Game</button>
+                    </div>
+                  </div>
+                  <div id="host-join-qr" class="host-join-qr empty" title="Scan to join"><img id="host-join-qr-img" src="" alt="" /></div>
+                </div>
+              </div>
             </div>
-          </section>
 
-          <section class="right-options-card">
-            <h3>Copy your IPs to send to friends</h3>
-            <button type="button" id="btn-local" class="btn btn-block">Local</button>
-            <button type="button" id="btn-lan" class="btn btn-block">LAN</button>
-            <button type="button" id="btn-external-join" class="btn btn-block" hidden>Copy external link</button>
-            <button type="button" id="btn-test-server" class="btn btn-block">Test server</button>
-          </section>
+            <div id="host-players-section" class="panel-section" hidden>
+              <h2>Players</h2>
+              <div id="host-players-list"></div>
+            </div>
+
+            <div class="panel-section">
+              <div class="flex-row">
+                <button type="button" id="host-signout" class="btn btn-sm">Sign Out</button>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+
+      <!-- GAMES TAB -->
+      <div class="tab-content" id="tab-games">
+        <div class="panel">
+          <div style="margin-bottom:1.25rem;">
+            <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.35em;background:var(--gradient-primary);-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;margin-bottom:0.35rem;">Pick a Game</div>
+            <h1 style="font-size:1.75rem;font-weight:600;color:var(--color-text);margin:0;">Choose a game. Create a room. Start playing.</h1>
+          </div>
+          <div class="games-grid" id="games-grid"></div>
         </div>
-      </main>
+      </div>
     </div>
 
     <script src="./renderer.js"></script>

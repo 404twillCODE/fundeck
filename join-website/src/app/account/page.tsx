@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 
 import Container from "@/components/Container";
 import { useAuth } from "@/games/blackjack/contexts/AuthContext";
 
-export default function AccountPage() {
+function AccountPageContent() {
   const prefersReducedMotion = useReducedMotion();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextParam = searchParams.get("next");
+  const hasNext = !!nextParam;
   const { loading, user, username, email, stats, signIn, signUp, signOut, updateUsername } = useAuth();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup">(nextParam ? "signup" : "signin");
   const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formDisplayName, setFormDisplayName] = useState("");
@@ -52,7 +55,9 @@ export default function AccountPage() {
             >
               <h1 className="text-2xl font-semibold text-white">Local Account</h1>
               <p className="mt-2 text-white/60">
-                Create an account on this host machine to play and persist stats.
+                {hasNext
+                  ? "Sign in or create an account to continue to the game."
+                  : "Create an account on this host machine to play and persist stats."}
               </p>
               <div className="mt-6 flex gap-2">
                 <button
@@ -256,5 +261,25 @@ export default function AccountPage() {
         </Container>
       </section>
     </main>
+  );
+}
+
+export default function AccountPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex-1">
+          <section className="py-20 sm:py-28">
+            <Container>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-white/70">
+                Loading account...
+              </div>
+            </Container>
+          </section>
+        </main>
+      }
+    >
+      <AccountPageContent />
+    </Suspense>
   );
 }

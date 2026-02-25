@@ -8,10 +8,12 @@ contextBridge.exposeInMainWorld("hostDesktop", {
   sendConsoleInput: (line) => ipcRenderer.invoke("host:console-input", line),
   startServer: () => ipcRenderer.invoke("host:start-server"),
   stopServer: () => ipcRenderer.invoke("host:stop-server"),
-  openDashboard: (embedded = false) => ipcRenderer.invoke("host:open-dashboard", embedded),
   copyText: (text) => ipcRenderer.invoke("host:copy-text", text),
   openUrl: (url) => ipcRenderer.invoke("host:open-url", url),
   setExternalUrl: (url) => ipcRenderer.invoke("host:set-external-url", url),
+
+  hostApi: (method, path, body) => ipcRenderer.invoke("host:api", method, path, body),
+
   onState: (handler) => {
     const wrapped = (_event, state) => handler(state);
     ipcRenderer.on("host:state", wrapped);

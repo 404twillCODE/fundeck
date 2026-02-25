@@ -1,9 +1,10 @@
 import RoomClient from "@/app/room/[code]/RoomClient";
 
 type RoomPageProps = {
-  params: { code: string };
+  params: Promise<{ code: string }>;
 };
 
-export default function RoomPage({ params }: RoomPageProps) {
-  return <RoomClient code={params.code} />;
+export default async function RoomPage({ params }: RoomPageProps) {
+  const { code } = await params;
+  return <RoomClient code={code ?? ""} />;
 }

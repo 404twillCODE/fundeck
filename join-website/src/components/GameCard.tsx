@@ -38,8 +38,6 @@ export default function GameCard({ game }: GameCardProps) {
     motionY.set(0);
   };
 
-  const playHref =
-    game.slug === "blackjack" ? "/host" : `/games/${game.slug}`;
   const wipLabel = game.wipLabel ?? "WIP";
 
   return (
@@ -119,7 +117,7 @@ export default function GameCard({ game }: GameCardProps) {
             </span>
           </div>
         ) : (
-          <Link href={playHref} className="inline-flex">
+          <Link href={`/account?next=/join`} className="inline-flex">
             <motion.span
               className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white animate-[glow-pulse_3s_ease-in-out_infinite]"
               whileHover={
@@ -128,7 +126,7 @@ export default function GameCard({ game }: GameCardProps) {
               whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
               transition={{ type: "spring", stiffness: 220, damping: 14 }}
             >
-              Play
+              Join Game
             </motion.span>
           </Link>
         )}

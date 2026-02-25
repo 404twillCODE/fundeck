@@ -25,7 +25,7 @@ function JoinContent({ code }: JoinClientProps) {
   );
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const roomCode = code.toUpperCase();
+  const roomCode = String(code ?? "").toUpperCase();
   const displayName = name || username;
 
   if (authLoading) {

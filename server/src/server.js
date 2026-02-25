@@ -56,17 +56,21 @@ function devLog(message, details) {
   console.log(`[game-server:dev] ${message}`, details);
 }
 
+const SQLITE_INSTALL_HINT =
+  "To enable persistent storage and saved accounts, install the optional dependency. From the project root run: cd server && npm install better-sqlite3";
+
 function createStore() {
   if (!ENABLE_SQLITE_PERSISTENCE) {
-    return { store: new MemoryStore(), mode: "memory" };
+    return { store: new MemoryStore(), mode: "memory", sqliteAvailable: false };
   }
 
   try {
     const store = new SqliteStore({ dbPath: SQLITE_DB_PATH });
-    return { store, mode: `sqlite:${SQLITE_DB_PATH}` };
+    return { store, mode: `sqlite:${SQLITE_DB_PATH}`, sqliteAvailable: true };
   } catch (error) {
     console.error("[persistence] SQLite unavailable, falling back to memory:", error.message);
-    return { store: new MemoryStore(), mode: "memory" };
+    console.warn("[persistence]", SQLITE_INSTALL_HINT);
+    return { store: new MemoryStore(), mode: "memory", sqliteAvailable: false };
   }
 }
 
@@ -213,14 +217,18 @@ function publicStatsFromRecord(statsRecord) {
 async function bootstrap() {
   registerBlackjack(registerGame);
 
-  const { store, mode } = createStore();
+  const { store, mode, sqliteAvailable: persistenceSqlite } = createStore();
   let authStore;
+  let authSqliteAvailable = false;
   try {
     authStore = new AuthStore({ dbPath: SQLITE_DB_PATH });
+    authSqliteAvailable = true;
   } catch (error) {
     console.warn("[auth] SQLite unavailable (e.g. better-sqlite3 not built), using in-memory auth:", error.message);
+    console.warn("[auth]", SQLITE_INSTALL_HINT);
     authStore = new MemoryAuthStore();
   }
+  const sqliteAvailable = persistenceSqlite && authSqliteAvailable;
   const rooms = new Map();
   const joinAttempts = new Map();
 
@@ -368,7 +376,14 @@ async function bootstrap() {
   });
 
   expressApp.get("/health", (_req, res) => {
-    res.json({ status: "ok", mode, rooms: rooms.size, games: getGames() });
+    res.json({
+      status: "ok",
+      mode,
+      rooms: rooms.size,
+      games: getGames(),
+      sqliteAvailable: !!sqliteAvailable,
+      ...(sqliteAvailable ? {} : { sqliteInstallHint: SQLITE_INSTALL_HINT }),
+    });
   });
 
   expressApp.get("/api/network-info", (_req, res) => {
@@ -383,6 +398,167 @@ async function bootstrap() {
 
   expressApp.get("/api/games", (_req, res) => {
     res.json({ games: getGames() });
+  });
+
+  function isRequestFromLocalhost(req) {
+    const ip = String(req.ip || req.connection?.remoteAddress || "").toLowerCase();
+    return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  }
+
+  function requireLocalhost(req, res) {
+    if (!isRequestFromLocalhost(req)) {
+      res.status(403).json({ error: "Host admin endpoints are only accessible from localhost." });
+      return false;
+    }
+    return true;
+  }
+
+  expressApp.get("/api/host/rooms", (req, res) => {
+    if (!requireLocalhost(req, res)) return;
+    const result = [];
+    rooms.forEach((room) => {
+      result.push({
+        roomCode: room.roomCode,
+        gameId: room.gameId,
+        phase: room.phase,
+        hostPlayerId: room.hostPlayerId,
+        createdAt: room.createdAt,
+        players: room.players.map((p) => ({
+          playerId: p.playerId,
+          name: p.name,
+          connected: p.connected,
+          userId: p.userId,
+          balance: p.balance,
+          ready: p.ready,
+          status: p.status,
+        })),
+      });
+    });
+    res.json({ rooms: result });
+  });
+
+  expressApp.post("/api/host/kick", express.json(), (req, res) => {
+    if (!requireLocalhost(req, res)) return;
+    const { roomCode, playerId } = req.body || {};
+    const room = rooms.get(String(roomCode || "").toUpperCase());
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    const playerIndex = room.players.findIndex((p) => p.playerId === playerId);
+    if (playerIndex === -1) { res.status(404).json({ error: "Player not found" }); return; }
+    const player = room.players[playerIndex];
+    if (player.socketId) {
+      const targetSocket = io.sockets.sockets.get(player.socketId);
+      if (targetSocket) {
+        targetSocket.emit("error", { message: "You have been kicked by the host." });
+        targetSocket.data.roomCode = null;
+        targetSocket.data.playerId = null;
+        targetSocket.leave(room.roomCode);
+      }
+    }
+    room.players.splice(playerIndex, 1);
+    if (!room.players.length) { destroyRoom(room.roomCode); res.json({ ok: true }); return; }
+    if (room.hostPlayerId === playerId) { room.hostPlayerId = room.players[0].playerId; }
+    persistRoom(room);
+    emitRoomState(room.roomCode);
+    res.json({ ok: true });
+  });
+
+  expressApp.post("/api/host/ban", express.json(), (req, res) => {
+    if (!requireLocalhost(req, res)) return;
+    const { roomCode, playerId } = req.body || {};
+    const room = rooms.get(String(roomCode || "").toUpperCase());
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    const playerIndex = room.players.findIndex((p) => p.playerId === playerId);
+    if (playerIndex === -1) { res.status(404).json({ error: "Player not found" }); return; }
+    const player = room.players[playerIndex];
+    if (!room.bannedUserIds) room.bannedUserIds = [];
+    if (player.userId) room.bannedUserIds.push(player.userId);
+    if (player.socketId) {
+      const targetSocket = io.sockets.sockets.get(player.socketId);
+      if (targetSocket) {
+        targetSocket.emit("error", { message: "You have been banned by the host." });
+        targetSocket.data.roomCode = null;
+        targetSocket.data.playerId = null;
+        targetSocket.leave(room.roomCode);
+      }
+    }
+    room.players.splice(playerIndex, 1);
+    if (!room.players.length) { destroyRoom(room.roomCode); res.json({ ok: true }); return; }
+    if (room.hostPlayerId === playerId) { room.hostPlayerId = room.players[0].playerId; }
+    persistRoom(room);
+    emitRoomState(room.roomCode);
+    res.json({ ok: true });
+  });
+
+  expressApp.post("/api/host/set-balance", express.json(), (req, res) => {
+    if (!requireLocalhost(req, res)) return;
+    const { roomCode, playerId, balance } = req.body || {};
+    const room = rooms.get(String(roomCode || "").toUpperCase());
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    const player = room.players.find((p) => p.playerId === playerId);
+    if (!player) { res.status(404).json({ error: "Player not found" }); return; }
+    const newBalance = Number(balance);
+    if (!Number.isFinite(newBalance) || newBalance < 0) { res.status(400).json({ error: "Invalid balance" }); return; }
+    player.balance = Math.floor(newBalance);
+    persistRoom(room);
+    emitRoomState(room.roomCode);
+    res.json({ ok: true, balance: player.balance });
+  });
+
+  expressApp.post("/api/host/create-room", express.json(), (req, res) => {
+    if (!requireLocalhost(req, res)) return;
+    const session = getSessionFromRequest(req);
+    if (!session) { res.status(401).json({ error: "Not authenticated. Sign in first." }); return; }
+    const { gameId, name } = req.body || {};
+    const targetGameId = typeof gameId === "string" && getGame(gameId) ? gameId : DEFAULT_GAME_ID;
+    const game = getGame(targetGameId);
+    if (!game) { res.status(400).json({ error: "Unknown game" }); return; }
+    const roomCode = generateRoomCode(rooms);
+    const room = {
+      roomCode,
+      gameId: targetGameId,
+      phase: "lobby",
+      hostPlayerId: null,
+      players: [],
+      chat: [],
+      bannedUserIds: [],
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    if (typeof game.onRoomCreated === "function") { game.onRoomCreated(room); }
+    rooms.set(roomCode, room);
+    persistRoom(room);
+    res.json({ roomCode, gameId: targetGameId });
+  });
+
+  expressApp.post("/api/host/start-game", express.json(), (req, res) => {
+    if (!requireLocalhost(req, res)) return;
+    const { roomCode } = req.body || {};
+    const room = rooms.get(String(roomCode || "").toUpperCase());
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    room.phase = "in_game";
+    room.players.forEach((p) => { p.ready = false; });
+    const game = getGame(room.gameId);
+    if (game && typeof game.onGameStarted === "function") {
+      game.onGameStarted({ io, room, helpers: gameHelpers });
+    }
+    persistRoom(room);
+    emitRoomState(room.roomCode);
+    res.json({ ok: true });
+  });
+
+  expressApp.post("/api/host/set-game", express.json(), (req, res) => {
+    if (!requireLocalhost(req, res)) return;
+    const { roomCode, gameId } = req.body || {};
+    const room = rooms.get(String(roomCode || "").toUpperCase());
+    if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+    if (room.phase !== "lobby") { res.status(400).json({ error: "Cannot change game after start" }); return; }
+    const game = getGame(gameId);
+    if (!game) { res.status(400).json({ error: "Unknown game" }); return; }
+    room.gameId = gameId;
+    if (typeof game.onRoomCreated === "function") { game.onRoomCreated(room); }
+    persistRoom(room);
+    emitRoomState(room.roomCode);
+    res.json({ ok: true });
   });
 
   const server = http.createServer(expressApp);
@@ -637,6 +813,11 @@ async function bootstrap() {
       const room = rooms.get(normalizedCode);
       if (!room) {
         callback?.({ error: "Room not found" });
+        return;
+      }
+
+      if (Array.isArray(room.bannedUserIds) && room.bannedUserIds.includes(authUser.id)) {
+        callback?.({ error: "You have been banned from this room." });
         return;
       }
 
@@ -897,11 +1078,15 @@ async function bootstrap() {
     });
   }, 30 * 1000);
 
+  let nextRequestHandler = null;
   if (!IS_DEV) {
-    const nextApp = next({ dev: false, dir: NEXT_APP_DIR });
-    const handle = nextApp.getRequestHandler();
-    await nextApp.prepare();
-    expressApp.all("*", (req, res) => handle(req, res));
+    expressApp.all("*", (req, res) => {
+      if (!nextRequestHandler) {
+        res.status(503).setHeader("Retry-After", "5").json({ error: "Server is starting…" });
+        return;
+      }
+      nextRequestHandler(req, res);
+    });
   }
 
   server.listen(PORT, HOST, () => {
@@ -914,6 +1099,16 @@ async function bootstrap() {
       console.log(`[game-server] Public: ${publicUrl}`);
     }
     console.log(`[game-server] Join example: ${lanUrl}/join/ABC123`);
+
+    if (!IS_DEV) {
+      const nextApp = next({ dev: false, dir: NEXT_APP_DIR });
+      nextRequestHandler = nextApp.getRequestHandler();
+      nextApp.prepare().then(() => {
+        console.log("[game-server] Next.js app ready.");
+      }).catch((err) => {
+        console.error("[game-server] Next.js prepare failed:", err);
+      });
+    }
   });
 }
 

@@ -14,7 +14,6 @@ const MAX_LOG_LINES = 500;
 let serverProcess = null;
 let intentionallyStopping = false;
 let mainWindow = null;
-let dashboardWindow = null;
 
 const EXTERNAL_URL_FILE = "fundeck-external-url.txt";
 
@@ -162,12 +161,14 @@ function resolveRuntimePaths() {
     const bundleRoot = path.join(process.resourcesPath, "bundle");
     return {
       serverEntry: path.join(bundleRoot, "server", "src", "server.js"),
+      serverDir: path.join(bundleRoot, "server"),
       nextAppDir: path.join(bundleRoot, "web"),
     };
   }
   const rootDir = path.resolve(__dirname, "..", "..");
   return {
     serverEntry: path.join(rootDir, "server", "src", "server.js"),
+    serverDir: path.join(rootDir, "server"),
     nextAppDir: path.join(rootDir, "join-website"),
     rootDir,
   };
@@ -227,7 +228,8 @@ function getSetupStatus() {
   if (!fs.existsSync(serverNodeModules)) {
     return {
       setupNeeded: true,
-      message: "Server dependencies not installed. Click Run setup below.",
+      message:
+        "Server dependencies not installed (includes optional better-sqlite3 for saved data). Click Run setup below.",
     };
   }
   if (!fs.existsSync(nextBuild)) {
@@ -326,17 +328,55 @@ function stopServerProcessTree(pid) {
   } catch {}
 }
 
+function runJoinWebsiteBuild(nextAppDir) {
+  return new Promise((resolve, reject) => {
+    updateState({
+      status: "starting",
+      logs: [...state.logs, "Building join-website…"].slice(-MAX_LOG_LINES),
+    });
+    const child = spawn("npm", ["run", "build"], {
+      cwd: nextAppDir,
+      shell: process.platform === "win32",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    child.stdout.on("data", (chunk) => appendLogs(normalizeLine(chunk)));
+    child.stderr.on("data", (chunk) => appendLogs(normalizeLine(chunk)));
+    child.on("exit", (code) => {
+      if (code !== 0) reject(new Error(`join-website build exited with code ${code}`));
+      else resolve();
+    });
+    child.on("error", (err) => reject(err));
+  });
+}
+
 async function startServer() {
   if (serverProcess || state.status === "starting" || state.status === "running") return state;
 
   let port;
   let serverEntry;
+  let serverDir;
   let nextAppDir;
   try {
     port = await findAvailablePort(DEFAULT_PORT);
     const paths = resolveRuntimePaths();
     serverEntry = paths.serverEntry;
+    serverDir = paths.serverDir;
     nextAppDir = paths.nextAppDir;
+
+    if (!app.isPackaged) {
+      try {
+        await runJoinWebsiteBuild(nextAppDir);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        updateState({
+          status: "error",
+          error: `Website build failed: ${message}`,
+          logs: [...state.logs, `Build failed: ${message}`].slice(-MAX_LOG_LINES),
+        });
+        return state;
+      }
+    }
+
     ensureRuntimeFilesExist(serverEntry, nextAppDir);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -362,7 +402,7 @@ async function startServer() {
 
   const sqlitePath = path.join(app.getPath("userData"), "fundeck-host.sqlite");
   const child = spawn(process.execPath, [serverEntry, "--serve-next"], {
-    cwd: nextAppDir,
+    cwd: serverDir,
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     env: {
@@ -399,10 +439,12 @@ async function startServer() {
 
   const healthy = await waitForHealthy(port);
   if (!healthy) {
+    const hint =
+      "If the log above mentions 'SQLite' or 'better-sqlite3', run Setup to install optional dependencies (server folder: npm install better-sqlite3), then start again.";
     updateState({
       status: "error",
       error: "Server did not become ready in time.",
-      logs: [...state.logs, "Health check timed out."].slice(-MAX_LOG_LINES),
+      logs: [...state.logs, "Health check timed out.", hint].slice(-MAX_LOG_LINES),
     });
     await stopServer();
     return state;
@@ -451,36 +493,6 @@ function createMainWindow() {
   mainWindow.maximize();
 }
 
-function openDashboard(embedded = false) {
-  if (!state.localUrl) return;
-  const targetUrl = `${state.localUrl}/host`;
-  if (!embedded) {
-    shell.openExternal(targetUrl);
-    return;
-  }
-  if (!dashboardWindow || dashboardWindow.isDestroyed()) {
-    dashboardWindow = new BrowserWindow({
-      width: 1280,
-      height: 800,
-      title: "FunDeck Host Dashboard",
-      autoHideMenuBar: true,
-      show: false,
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        webSecurity: true,
-      },
-    });
-    dashboardWindow.on("closed", () => { dashboardWindow = null; });
-    dashboardWindow.once("ready-to-show", () => {
-      if (dashboardWindow && !dashboardWindow.isDestroyed()) dashboardWindow.show();
-    });
-  }
-  dashboardWindow.loadURL(targetUrl);
-  if (!dashboardWindow.isDestroyed() && dashboardWindow.isVisible()) {
-    dashboardWindow.focus();
-  }
-}
 
 app.whenReady().then(async () => {
   state.externalUrl = loadExternalUrl();
@@ -511,9 +523,32 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("host:start-server", async () => startServer());
   ipcMain.handle("host:stop-server", async () => stopServer());
-  ipcMain.handle("host:open-dashboard", async (_event, embedded = false) => {
-    openDashboard(Boolean(embedded));
-    return true;
+  ipcMain.handle("host:api", async (_event, method, apiPath, body) => {
+    const port = state?.port || DEFAULT_PORT;
+    const url = `http://127.0.0.1:${port}${apiPath}`;
+    return new Promise((resolve) => {
+      const req = http.request(url, { method: method || "GET" }, (res) => {
+        const setCookieHeader = res.headers["set-cookie"];
+        if (setCookieHeader) {
+          const raw = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
+          const cookiePart = raw.split(";")[0];
+          if (cookiePart) state._sessionCookie = cookiePart;
+        }
+        let data = "";
+        res.on("data", (chunk) => { data += chunk; });
+        res.on("end", () => {
+          try { resolve(JSON.parse(data)); } catch { resolve({ error: data }); }
+        });
+      });
+      req.on("error", (err) => resolve({ error: err.message }));
+      req.setTimeout(8000, () => { req.destroy(); resolve({ error: "Request timed out" }); });
+      req.setHeader("Content-Type", "application/json");
+      if (state._sessionCookie) req.setHeader("Cookie", state._sessionCookie);
+      if (body && method !== "GET") {
+        req.write(JSON.stringify(body));
+      }
+      req.end();
+    });
   });
   ipcMain.handle("host:copy-text", async (_event, text) => {
     clipboard.writeText(String(text || ""));

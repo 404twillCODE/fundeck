@@ -26,7 +26,7 @@ function RoomLobby({ code }: RoomClientProps) {
   const [joinError, setJoinError] = useState<string | null>(null);
   const autoJoinAttemptedRef = useRef(false);
 
-  const roomCode = code.toUpperCase();
+  const roomCode = String(code ?? "").toUpperCase();
   const localName = typeof window !== "undefined" ? localStorage.getItem(DISPLAY_NAME_KEY) || username || "" : username || "";
   const localToken = typeof window !== "undefined" ? localStorage.getItem(`fundeck:reconnect:${roomCode}`) : null;
   const liveGames = useMemo(() => games.filter((game) => game.status === "live"), []);
