@@ -67,7 +67,7 @@ function devLog(message: string, details?: unknown) {
   console.log(`[room] ${message}`, details);
 }
 
-export function RoomProvider({ children }: { children: React.ReactNode }) {
+export function RoomProvider({ children, authToken }: { children: React.ReactNode; authToken?: string | null }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +75,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
   const [reconnectToken, setReconnectTokenState] = useState<string | null>(null);
   const reconnectTokenRef = useRef<string | null>(null);
   const serverUrl = useMemo(() => getSocketServerUrl(), []);
+  const stableAuthToken = authToken ?? null;
 
   const setReconnectToken = useCallback((token: string | null) => {
     reconnectTokenRef.current = token;
@@ -82,13 +83,17 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    devLog("connecting", { serverUrl });
-    const nextSocket = io(serverUrl, {
+    devLog("connecting", { serverUrl, hasAuthToken: !!stableAuthToken });
+    const socketOptions: Parameters<typeof io>[1] = {
       transports: ["websocket", "polling"],
       reconnection: true,
       timeout: 10000,
       withCredentials: true,
-    });
+    };
+    if (stableAuthToken) {
+      socketOptions.auth = { token: stableAuthToken };
+    }
+    const nextSocket = io(serverUrl, socketOptions);
 
     nextSocket.on("connect", () => {
       setSocket(nextSocket);
@@ -128,7 +133,7 @@ export function RoomProvider({ children }: { children: React.ReactNode }) {
       devLog("socket_cleanup");
       nextSocket.disconnect();
     };
-  }, [serverUrl]);
+  }, [serverUrl, stableAuthToken]);
 
   const requireSocket = useCallback(() => {
     if (!socket || !socket.connected) {

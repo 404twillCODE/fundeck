@@ -11,7 +11,14 @@ export function getSocketServerUrl(): string {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    return DEFAULT_LOCAL_SERVER_URL;
+    const { origin, hostname } = window.location;
+    // When developing on the same machine, talk to localhost:5250 as before.
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return DEFAULT_LOCAL_SERVER_URL;
+    }
+    // When the site is opened from another device via LAN (e.g. 192.168.x.x),
+    // use that origin so sockets/API point at the host machine, not the viewer's localhost.
+    return origin;
   }
 
   return window.location.origin;

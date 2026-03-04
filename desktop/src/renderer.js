@@ -258,6 +258,15 @@ $("host-copy-join").addEventListener("click", () => {
   if (url) { window.hostDesktop.copyText(url); setCopyFeedback($("host-copy-join"), "Copied!"); }
 });
 
+const hostOpenJoinBtn = $("host-open-join");
+if (hostOpenJoinBtn) {
+  hostOpenJoinBtn.addEventListener("click", () => {
+    const url = hostJoinUrl.textContent;
+    if (!url) return;
+    window.hostDesktop.openUrl(url);
+  });
+}
+
 $("host-set-game").addEventListener("click", async () => {
   if (!activeRoom) return;
   const result = await api("POST", "/api/host/set-game", { roomCode: activeRoom.roomCode, gameId: hostGameSelect.value });

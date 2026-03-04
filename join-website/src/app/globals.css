@@ -65,6 +65,7 @@ body {
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     background-size: 200% 200%;
+    pointer-events: none;
   }
 
   .neon-card:hover .neon-border {
@@ -84,6 +85,7 @@ body {
     );
     transform: translateX(-120%);
     opacity: 0;
+    pointer-events: none;
   }
 
   .neon-card:hover .shine-sweep {

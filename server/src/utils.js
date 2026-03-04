@@ -1,6 +1,7 @@
 const ROOM_CODE_REGEX = /^[A-Z0-9]{6}$/;
 const MAX_CHAT_LENGTH = 240;
 const RECONNECT_GRACE_MS = 1000 * 60 * 30;
+const ROOM_CREATION_GRACE_MS = 1000 * 60 * 5;
 const DEFAULT_GAME_ID = "blackjack";
 
 function generateRoomCode(existingRooms) {
@@ -107,6 +108,7 @@ function buildLocalUrls(port) {
 module.exports = {
   DEFAULT_GAME_ID,
   RECONNECT_GRACE_MS,
+  ROOM_CREATION_GRACE_MS,
   generateRoomCode,
   sanitizeChatMessage,
   sanitizeName,

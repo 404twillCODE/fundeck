@@ -9,6 +9,7 @@ const bcrypt = require("bcryptjs");
 const {
   DEFAULT_GAME_ID,
   RECONNECT_GRACE_MS,
+  ROOM_CREATION_GRACE_MS,
   generateRoomCode,
   sanitizeChatMessage,
   sanitizeName,
@@ -118,6 +119,8 @@ function getSessionTokenFromCookieHeader(rawCookieHeader) {
   return cookies[SESSION_COOKIE_NAME] || null;
 }
 
+const USE_SECURE_COOKIES = process.env.SECURE_COOKIES === "true";
+
 function setSessionCookie(res, token, expiresAtIso) {
   const expiresAt = Date.parse(expiresAtIso);
   const maxAgeSeconds = Number.isFinite(expiresAt)
@@ -132,7 +135,7 @@ function setSessionCookie(res, token, expiresAtIso) {
     `Max-Age=${maxAgeSeconds}`,
   ];
 
-  if (NODE_ENV === "production") {
+  if (USE_SECURE_COOKIES) {
     segments.push("Secure");
   }
 
@@ -148,7 +151,7 @@ function clearSessionCookie(res) {
     "Max-Age=0",
   ];
 
-  if (NODE_ENV === "production") {
+  if (USE_SECURE_COOKIES) {
     segments.push("Secure");
   }
 
@@ -301,6 +304,7 @@ async function bootstrap() {
       res.status(201).json({
         user: publicUserFromRecord(user),
         stats: publicStatsFromRecord(stats),
+        sessionToken: session.token,
       });
     } catch (error) {
       console.error("register error:", error);
@@ -333,6 +337,7 @@ async function bootstrap() {
       res.json({
         user: publicUserFromRecord(user),
         stats: publicStatsFromRecord(stats),
+        sessionToken: session.token,
       });
     } catch (error) {
       console.error("login error:", error);
@@ -351,7 +356,8 @@ async function bootstrap() {
   });
 
   expressApp.get("/api/me", (req, res) => {
-    const session = getSessionFromRequest(req);
+    const sessionToken = getSessionTokenFromCookieHeader(req.headers.cookie);
+    const session = sessionToken ? authStore.getUserAndStatsBySessionToken(sessionToken) : null;
     if (!session) {
       res.status(401).json({ error: "Not authenticated." });
       return;
@@ -360,6 +366,7 @@ async function bootstrap() {
     res.json({
       user: publicUserFromRecord(session.user),
       stats: publicStatsFromRecord(session.stats),
+      sessionToken,
     });
   });
 
@@ -633,7 +640,10 @@ async function bootstrap() {
   };
 
   io.use((socket, nextMiddleware) => {
-    const token = getSessionTokenFromCookieHeader(socket.handshake.headers.cookie);
+    let token = getSessionTokenFromCookieHeader(socket.handshake.headers.cookie || "");
+    if (!token && socket.handshake.auth?.token) {
+      token = socket.handshake.auth.token;
+    }
     const session = token ? authStore.getUserAndStatsBySessionToken(token) : null;
 
     if (session) {
@@ -1055,6 +1065,8 @@ async function bootstrap() {
 
       room.players = room.players.filter((player) => player.connected || now - player.lastSeenAt < RECONNECT_GRACE_MS);
       if (!room.players.length) {
+        const roomAge = now - new Date(room.createdAt).getTime();
+        if (roomAge < ROOM_CREATION_GRACE_MS) return;
         devLog("room:destroy", { roomCode: room.roomCode, reason: "empty_after_reconnect_grace" });
         destroyRoom(room.roomCode);
         return;

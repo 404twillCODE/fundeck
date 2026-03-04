@@ -25,6 +25,7 @@ type AuthContextValue = {
   username: string;
   email: string | null;
   stats: LocalStats | null;
+  sessionToken: string | null;
   signUp: (email: string, password: string, username?: string) => Promise<{ data: unknown; error: unknown; requiresConfirmation?: boolean }>;
   signIn: (emailOrUsername: string, password: string) => Promise<{ data: unknown; error: unknown }>;
   signOut: () => Promise<void>;
@@ -34,6 +35,7 @@ type AuthContextValue = {
 type MeResponse = {
   user: LocalUser;
   stats: LocalStats;
+  sessionToken?: string;
 };
 
 const DISPLAY_NAME_KEY = "fundeck:displayName";
@@ -86,6 +88,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<LocalUser | null>(null);
   const [stats, setStats] = useState<LocalStats | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [displayNameOverride, setDisplayNameOverride] = useState(() => getStoredDisplayName());
   const baseUrl = useMemo(() => getSocketServerUrl().replace(/\/$/, ""), []);
 
@@ -123,11 +126,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!payload || !payload.user) {
       setUser(null);
       setStats(null);
+      setSessionToken(null);
       return;
     }
 
     setUser(payload.user);
     setStats(payload.stats);
+    if (payload.sessionToken) {
+      setSessionToken(payload.sessionToken);
+    }
   }, []);
 
   const refreshMe = useCallback(async () => {
@@ -184,6 +191,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
     setUser(null);
     setStats(null);
+    setSessionToken(null);
     devLog("logout:ok");
   }, [request]);
 
@@ -238,6 +246,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       username,
       email: user?.email ?? null,
       stats,
+      sessionToken,
       signUp,
       signIn,
       signOut,
@@ -248,6 +257,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       loading,
       stats,
       username,
+      sessionToken,
       signUp,
       signIn,
       signOut,

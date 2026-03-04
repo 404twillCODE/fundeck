@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -69,16 +68,16 @@ function RoomLobby({ code }: RoomClientProps) {
     return (
       <main className="flex-1 py-16">
         <Container>
-          <NeonCard className="space-y-3 p-6 text-white/80">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_24px_80px_rgba(5,6,10,0.65)] backdrop-blur-xl transition-[border-color] duration-300 hover:border-white/20 space-y-3 p-6 text-white/80">
             <h1 className="text-2xl font-semibold text-white">Room {roomCode}</h1>
             <p className="text-white/60">Sign in with a local account before joining this room.</p>
-            <Link
+            <a
               href={`/account?next=/room/${roomCode}`}
-              className="inline-flex rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80"
+              className="inline-flex rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80 transition-all duration-200 hover:border-cyan-400/50 hover:bg-white/10 hover:text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.15)]"
             >
               Open Account
-            </Link>
-          </NeonCard>
+            </a>
+          </div>
         </Container>
       </main>
     );
@@ -147,7 +146,7 @@ function RoomLobby({ code }: RoomClientProps) {
               <button
                 type="button"
                 onClick={() => startGame()}
-                className="rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-300 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-black"
+                className="rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-300 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-black transition-all duration-200 hover:shadow-[0_0_24px_rgba(34,211,238,0.35)] hover:brightness-110 active:scale-[0.97]"
               >
                 Start Game
               </button>
@@ -157,7 +156,7 @@ function RoomLobby({ code }: RoomClientProps) {
             <button
               type="button"
               onClick={() => setReady(!self?.ready)}
-              className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80"
+              className="rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80 transition-all duration-200 hover:border-white/40 hover:bg-white/10 hover:text-white active:scale-[0.97]"
             >
               {self?.ready ? "Set Not Ready" : "Set Ready"}
             </button>
@@ -167,7 +166,7 @@ function RoomLobby({ code }: RoomClientProps) {
                 await leaveRoom();
                 router.push("/");
               }}
-              className="rounded-xl border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-100"
+              className="rounded-xl border border-rose-400/40 bg-rose-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-rose-100 transition-all duration-200 hover:border-rose-400/60 hover:bg-rose-500/30 active:scale-[0.97]"
             >
               Leave Room
             </button>
@@ -210,7 +209,7 @@ function RoomLobby({ code }: RoomClientProps) {
                 await sendChat(chatInput);
                 setChatInput("");
               }}
-              className="rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-300 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-black"
+              className="rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-300 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-black transition-all duration-200 hover:shadow-[0_0_24px_rgba(34,211,238,0.35)] hover:brightness-110 active:scale-[0.97]"
             >
               Send
             </button>
@@ -223,8 +222,9 @@ function RoomLobby({ code }: RoomClientProps) {
 }
 
 export default function RoomClient({ code }: RoomClientProps) {
+  const { sessionToken } = useAuth();
   return (
-    <RoomProvider>
+    <RoomProvider authToken={sessionToken}>
       <RoomLobby code={code} />
     </RoomProvider>
   );
