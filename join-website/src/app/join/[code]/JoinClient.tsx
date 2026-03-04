@@ -89,14 +89,18 @@ function JoinContent({ code }: JoinClientProps) {
                 return;
               }
               localStorage.setItem(DISPLAY_NAME_KEY, cleaned);
-              const token = localStorage.getItem(`fundeck:reconnect:${roomCode}`);
+              const reconnectKey = `fundeck:reconnect:${roomCode}`;
+              const token = localStorage.getItem(reconnectKey);
               const result = await joinRoom(roomCode, cleaned, token);
               if (result.error) {
+                if (result.error.includes("Reconnect token does not match this signed-in account.")) {
+                  localStorage.removeItem(reconnectKey);
+                }
                 setLocalError(result.error);
                 return;
               }
               if (result.reconnectToken) {
-                localStorage.setItem(`fundeck:reconnect:${roomCode}`, result.reconnectToken);
+                localStorage.setItem(reconnectKey, result.reconnectToken);
               }
               router.push(`/room/${roomCode}`);
             }}
@@ -105,7 +109,7 @@ function JoinContent({ code }: JoinClientProps) {
             Join Room
           </button>
           {localError ? <p className="text-sm text-rose-300">{localError}</p> : null}
-          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+          {error && error !== localError ? <p className="text-sm text-rose-300">{error}</p> : null}
         </div>
       </Container>
     </main>

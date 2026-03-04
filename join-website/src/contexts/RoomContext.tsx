@@ -182,6 +182,7 @@ export function RoomProvider({ children, authToken }: { children: React.ReactNod
         const responseError = extractAckError(response);
         if (responseError) {
           setError(responseError);
+          devLog("join_room:server_error", { roomCode, error: responseError, raw: response });
           return { playerId: null, reconnectToken: null, error: responseError };
         }
 
