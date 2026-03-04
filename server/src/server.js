@@ -199,10 +199,14 @@ function resolveUniquePlayerName(room, requestedName, excludePlayerId = null) {
 }
 
 function publicUserFromRecord(userRecord) {
+  const defaultName = defaultNameFromEmail(userRecord.email);
+  const rawDisplayName = typeof userRecord.display_name === "string" ? userRecord.display_name : "";
+  const cleanedDisplayName = sanitizeName(rawDisplayName) || null;
   return {
     id: userRecord.id,
     email: userRecord.email,
-    defaultName: defaultNameFromEmail(userRecord.email),
+    defaultName,
+    displayName: cleanedDisplayName || defaultName,
     createdAt: userRecord.created_at,
   };
 }
@@ -279,6 +283,7 @@ async function bootstrap() {
     try {
       const email = sanitizeEmail(req.body?.email);
       const password = String(req.body?.password || "");
+      const rawDisplayName = String(req.body?.displayName || "");
 
       if (!EMAIL_REGEX.test(email)) {
         res.status(400).json({ error: "Please provide a valid email address." });
@@ -294,7 +299,8 @@ async function bootstrap() {
       }
 
       const passwordHash = await bcrypt.hash(password, 12);
-      const user = authStore.createUser({ email, passwordHash });
+      const safeDisplayName = sanitizeName(rawDisplayName) || null;
+      const user = authStore.createUser({ email, passwordHash, displayName: safeDisplayName });
       const expiresAtIso = new Date(Date.now() + SESSION_TTL_MS).toISOString();
       const session = authStore.createSession(user.id, expiresAtIso);
       const stats = authStore.getStats(user.id);
@@ -366,6 +372,31 @@ async function bootstrap() {
     res.json({
       user: publicUserFromRecord(session.user),
       stats: publicStatsFromRecord(session.stats),
+      sessionToken,
+    });
+  });
+
+  expressApp.post("/api/account/display-name", (req, res) => {
+    const sessionToken = getSessionTokenFromCookieHeader(req.headers.cookie);
+    const session = sessionToken ? authStore.getUserAndStatsBySessionToken(sessionToken) : null;
+    if (!session) {
+      res.status(401).json({ error: "Not authenticated." });
+      return;
+    }
+
+    const rawDisplayName = String(req.body?.displayName || "");
+    const cleaned = sanitizeName(rawDisplayName);
+    if (!cleaned) {
+      res.status(400).json({ error: "Display name cannot be empty." });
+      return;
+    }
+
+    const updatedUser = authStore.updateDisplayName(session.user.id, cleaned);
+    const stats = authStore.getStats(session.user.id);
+
+    res.json({
+      user: publicUserFromRecord(updatedUser || session.user),
+      stats: publicStatsFromRecord(stats),
       sessionToken,
     });
   });
@@ -768,7 +799,8 @@ async function bootstrap() {
       const roomCode = generateRoomCode(rooms);
       const reconnectToken = uuidv4();
       const stats = authStore.getStats(authUser.id);
-      const requestedName = sanitizeName(name) || defaultNameFromEmail(authUser.email);
+      const preferredName = typeof authUser.display_name === "string" ? authUser.display_name : "";
+      const requestedName = sanitizeName(preferredName) || defaultNameFromEmail(authUser.email);
       const player = createPlayer(requestedName, socket, reconnectToken, authUser.id, Number(stats.chips || 1000));
 
       const room = {
@@ -831,7 +863,9 @@ async function bootstrap() {
         return;
       }
 
-      const preferredName = sanitizeName(name) || defaultNameFromEmail(authUser.email);
+      const preferredName =
+        sanitizeName(typeof authUser.display_name === "string" ? authUser.display_name : "") ||
+        defaultNameFromEmail(authUser.email);
 
       let player = room.players.find((entry) => entry.userId && entry.userId === authUser.id) || null;
       if (!player && reconnectToken) {
@@ -873,32 +907,8 @@ async function bootstrap() {
     });
 
     socket.on("lobby:set_name", ({ name } = {}, callback) => {
-      const room = roomAccessor(socket);
-      if (!room) {
-        callback?.({ error: "Room not found" });
-        return;
-      }
-      const player = room.players.find((entry) => entry.playerId === socket.data.playerId);
-      if (!player) {
-        callback?.({ error: "Player not found" });
-        return;
-      }
-      if (!socket.data.userId || (player.userId && player.userId !== socket.data.userId)) {
-        callback?.({ error: "Unauthorized player update" });
-        return;
-      }
-
-      const cleaned = sanitizeName(name);
-      if (!cleaned) {
-        callback?.({ error: "Invalid name" });
-        return;
-      }
-
-      player.name = resolveUniquePlayerName(room, cleaned, player.playerId);
-      persistRoom(room);
-      emitRoomState(room.roomCode);
-      devLog("lobby:set_name", { roomCode: room.roomCode, playerId: player.playerId });
-      callback?.({ ok: true, name: player.name });
+      // Player names are now locked to the account display name.
+      callback?.({ error: "Name is locked to your account. Update it on the Account page." });
     });
 
     socket.on("lobby:player_ready", ({ ready } = {}, callback) => {

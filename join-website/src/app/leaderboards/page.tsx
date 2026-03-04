@@ -12,6 +12,7 @@ type LeaderboardEntry = {
   rank: number;
   userId: string;
   email: string;
+  displayName: string | null;
   gamesPlayed: number;
   blackjackWins: number;
   blackjackLosses: number;
@@ -23,9 +24,15 @@ type LeaderboardResponse = {
   yourRank: LeaderboardEntry | null;
 };
 
-function displayName(email: string): string {
+function fallbackDisplayName(email: string): string {
   const localPart = String(email || "").toLowerCase().split("@")[0] || "player";
   return localPart.slice(0, 24);
+}
+
+function entryName(entry: LeaderboardEntry): string {
+  const fromDisplay = String(entry.displayName || "").trim();
+  if (fromDisplay) return fromDisplay.slice(0, 24);
+  return fallbackDisplayName(entry.email);
 }
 
 export default function LeaderboardsPage() {
@@ -96,7 +103,7 @@ export default function LeaderboardsPage() {
           <NeonCard className="p-6">
             <p className="text-xs uppercase tracking-[0.25em] text-white/50">Your Rank</p>
             <p className="mt-2 text-xl font-semibold text-white">
-              #{yourRank.rank} - {displayName(yourRank.email)} ({yourRank.blackjackWins} wins, {yourRank.chips} chips)
+              #{yourRank.rank} - {entryName(yourRank)} ({yourRank.blackjackWins} wins, {yourRank.chips} chips)
             </p>
           </NeonCard>
         ) : null}
@@ -122,7 +129,7 @@ export default function LeaderboardsPage() {
                     {entries.map((entry) => (
                       <tr key={entry.userId} className="border-t border-white/10">
                         <td className="px-4 py-3 font-semibold text-cyan-300">#{entry.rank}</td>
-                        <td className="px-4 py-3">{displayName(entry.email)}</td>
+                        <td className="px-4 py-3">{entryName(entry)}</td>
                         <td className="px-4 py-3">{entry.blackjackWins}</td>
                         <td className="px-4 py-3">{entry.blackjackLosses}</td>
                         <td className="px-4 py-3">{entry.gamesPlayed}</td>

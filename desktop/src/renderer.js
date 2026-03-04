@@ -179,7 +179,10 @@ authSubmit.addEventListener("click", async () => {
   authSubmit.textContent = "Working...";
 
   const endpoint = authMode === "signup" ? "/api/auth/register" : "/api/auth/login";
-  const body = { email, password };
+  const body =
+    authMode === "signup"
+      ? { email, password, displayName: name }
+      : { email, password };
   const result = await api("POST", endpoint, body);
 
   authSubmit.disabled = false;
@@ -213,7 +216,11 @@ function showHostPanel() {
   hostPanel.hidden = false;
   if (currentUser) {
     sidebarUser.hidden = false;
-    sidebarUsername.textContent = localStorage.getItem("fundeck:displayName") || currentUser.defaultName || "Host";
+    sidebarUsername.textContent =
+      currentUser.displayName ||
+      localStorage.getItem("fundeck:displayName") ||
+      currentUser.defaultName ||
+      "Host";
     sidebarEmail.textContent = currentUser.email || "";
   }
   refreshHostPanel();

@@ -8,6 +8,7 @@ type LocalUser = {
   id: string;
   email: string;
   defaultName: string;
+  displayName?: string | null;
   createdAt?: string | null;
 };
 
@@ -38,7 +39,6 @@ type MeResponse = {
   sessionToken?: string;
 };
 
-const DISPLAY_NAME_KEY = "fundeck:displayName";
 const DEV_LOGGING = process.env.NODE_ENV !== "production";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -61,21 +61,6 @@ function defaultNameFromEmail(email: string): string {
   return normalizeDisplayName(localPart) || "player";
 }
 
-function getStoredDisplayName(): string {
-  if (typeof window === "undefined") return "";
-  return normalizeDisplayName(localStorage.getItem(DISPLAY_NAME_KEY) || "");
-}
-
-function setStoredDisplayName(name: string) {
-  if (typeof window === "undefined") return;
-  const normalized = normalizeDisplayName(name);
-  if (!normalized) {
-    localStorage.removeItem(DISPLAY_NAME_KEY);
-    return;
-  }
-  localStorage.setItem(DISPLAY_NAME_KEY, normalized);
-}
-
 export const useAuth = () => {
   const value = useContext(AuthContext);
   if (!value) {
@@ -89,7 +74,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<LocalUser | null>(null);
   const [stats, setStats] = useState<LocalStats | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const [displayNameOverride, setDisplayNameOverride] = useState(() => getStoredDisplayName());
   const baseUrl = useMemo(() => getSocketServerUrl().replace(/\/$/, ""), []);
 
   const request = useCallback(
@@ -195,20 +179,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     devLog("logout:ok");
   }, [request]);
 
-  const updateUsername = useCallback(async (nextUsername: string) => {
-    const normalized = normalizeDisplayName(nextUsername);
-    if (!normalized) {
-      return { error: "Display name cannot be empty." };
-    }
-    setDisplayNameOverride(normalized);
-    setStoredDisplayName(normalized);
-    return { error: null };
-  }, []);
+  const updateUsername = useCallback(
+    async (nextUsername: string) => {
+      const normalized = normalizeDisplayName(nextUsername);
+      if (!normalized) {
+        return { error: "Display name cannot be empty." };
+      }
+
+      const response = await request<MeResponse>("/api/account/display-name", {
+        method: "POST",
+        body: JSON.stringify({ displayName: normalized }),
+      });
+      if (response.error) {
+        devLog("update_username:error", response.error);
+        return { error: response.error };
+      }
+
+      applyMePayload(response.data);
+      devLog("update_username:ok", { userId: response.data?.user.id });
+      return { error: null };
+    },
+    [applyMePayload, request],
+  );
 
   const username = useMemo(() => {
     if (!user) return "";
-    return normalizeDisplayName(displayNameOverride) || user.defaultName || defaultNameFromEmail(user.email);
-  }, [displayNameOverride, user]);
+    const fromUser = (user.displayName && normalizeDisplayName(user.displayName)) || user.defaultName || defaultNameFromEmail(user.email);
+    return normalizeDisplayName(fromUser);
+  }, [user]);
 
   const signUp = useCallback<AuthContextValue["signUp"]>(
     async (email, password, usernameInput) => {

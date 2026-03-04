@@ -11,8 +11,6 @@ import { games } from "@/data/games";
 import { useAuth } from "@/games/blackjack/contexts/AuthContext";
 import BlackjackInRoom from "@/games/blackjack/BlackjackInRoom";
 
-const DISPLAY_NAME_KEY = "fundeck:displayName";
-
 type RoomClientProps = {
   code: string;
 };
@@ -26,7 +24,6 @@ function RoomLobby({ code }: RoomClientProps) {
   const autoJoinAttemptedRef = useRef(false);
 
   const roomCode = String(code ?? "").toUpperCase();
-  const localName = typeof window !== "undefined" ? localStorage.getItem(DISPLAY_NAME_KEY) || username || "" : username || "";
   const localToken = typeof window !== "undefined" ? localStorage.getItem(`fundeck:reconnect:${roomCode}`) : null;
   const liveGames = useMemo(() => games.filter((game) => game.status === "live"), []);
 
@@ -34,7 +31,7 @@ function RoomLobby({ code }: RoomClientProps) {
     if (authLoading || !user) return;
     if (!connected || autoJoinAttemptedRef.current || room) return;
 
-    const activeName = localName || username;
+    const activeName = username;
     if (!activeName) {
       router.replace(`/join/${roomCode}`);
       return;
@@ -50,7 +47,7 @@ function RoomLobby({ code }: RoomClientProps) {
         setJoinError(result.error);
       }
     });
-  }, [authLoading, connected, joinRoom, localName, localToken, room, roomCode, router, user, username]);
+  }, [authLoading, connected, joinRoom, localToken, room, roomCode, router, user, username]);
 
   if (authLoading) {
     return (
@@ -119,7 +116,7 @@ function RoomLobby({ code }: RoomClientProps) {
   }
 
   if (room.phase === "in_game" && room.gameId === "blackjack") {
-    return <BlackjackInRoom roomCode={roomCode} name={localName || username} reconnectToken={localToken} />;
+    return <BlackjackInRoom roomCode={roomCode} name={username || ""} reconnectToken={localToken} />;
   }
 
   return (

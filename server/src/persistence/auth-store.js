@@ -17,11 +17,22 @@ class AuthStore {
           id TEXT PRIMARY KEY,
           email TEXT NOT NULL UNIQUE,
           password_hash TEXT NOT NULL,
-          created_at TEXT NOT NULL
+          created_at TEXT NOT NULL,
+          display_name TEXT
         )
       `,
       )
       .run();
+
+    // Ensure display_name column exists for databases created before this field was added.
+    try {
+      this.db.prepare("ALTER TABLE users ADD COLUMN display_name TEXT").run();
+    } catch (error) {
+      const message = String(error?.message || "");
+      if (!message.includes("duplicate column name") && !message.includes("duplicate column")) {
+        throw error;
+      }
+    }
 
     this.db
       .prepare(
@@ -55,13 +66,13 @@ class AuthStore {
       .run();
 
     this.createUserStmt = this.db.prepare(
-      "INSERT INTO users (id, email, password_hash, created_at) VALUES (@id, @email, @passwordHash, @createdAt)",
+      "INSERT INTO users (id, email, password_hash, created_at, display_name) VALUES (@id, @email, @passwordHash, @createdAt, @displayName)",
     );
     this.findUserByEmailStmt = this.db.prepare(
-      "SELECT id, email, password_hash, created_at FROM users WHERE email = ?",
+      "SELECT id, email, password_hash, created_at, display_name FROM users WHERE email = ?",
     );
     this.findUserByIdStmt = this.db.prepare(
-      "SELECT id, email, password_hash, created_at FROM users WHERE id = ?",
+      "SELECT id, email, password_hash, created_at, display_name FROM users WHERE id = ?",
     );
 
     this.createSessionStmt = this.db.prepare(
@@ -107,11 +118,16 @@ class AuthStore {
       `,
     );
 
+    this.updateDisplayNameStmt = this.db.prepare(
+      "UPDATE users SET display_name = @displayName WHERE id = @userId",
+    );
+
     this.topLeaderboardStmt = this.db.prepare(
       `
         SELECT
           u.id AS user_id,
           u.email,
+          u.display_name,
           s.games_played,
           s.blackjack_wins,
           s.blackjack_losses,
@@ -127,6 +143,7 @@ class AuthStore {
         SELECT
           u.id AS user_id,
           u.email,
+          u.display_name,
           s.games_played,
           s.blackjack_wins,
           s.blackjack_losses,
@@ -157,16 +174,18 @@ class AuthStore {
     return crypto.randomBytes(32).toString("hex");
   }
 
-  createUser({ email, passwordHash }) {
+  createUser({ email, passwordHash, displayName }) {
     const normalizedEmail = AuthStore.normalizeEmail(email);
     const createdAt = AuthStore.nowIso();
     const userId = AuthStore.generateId();
+    const safeDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : null;
 
     this.createUserStmt.run({
       id: userId,
       email: normalizedEmail,
       passwordHash,
       createdAt,
+      displayName: safeDisplayName,
     });
 
     this.ensureStats(userId, 1000);
@@ -274,6 +293,7 @@ class AuthStore {
       rank: index + 1,
       userId: row.user_id,
       email: row.email,
+      displayName: row.display_name || null,
       gamesPlayed: row.games_played,
       blackjackWins: row.blackjack_wins,
       blackjackLosses: row.blackjack_losses,
@@ -291,11 +311,19 @@ class AuthStore {
       rank: index + 1,
       userId: row.user_id,
       email: row.email,
+      displayName: row.display_name || null,
       gamesPlayed: row.games_played,
       blackjackWins: row.blackjack_wins,
       blackjackLosses: row.blackjack_losses,
       chips: row.chips,
     };
+  }
+
+  updateDisplayName(userId, displayName) {
+    if (!userId) return null;
+    const safeDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : null;
+    this.updateDisplayNameStmt.run({ userId, displayName: safeDisplayName });
+    return this.findUserById(userId);
   }
 }
 

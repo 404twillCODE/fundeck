@@ -8,8 +8,6 @@ import GradientText from "@/components/GradientText";
 import { RoomProvider, useRoom } from "@/contexts/RoomContext";
 import { useAuth } from "@/games/blackjack/contexts/AuthContext";
 
-const DISPLAY_NAME_KEY = "fundeck:displayName";
-
 const cardClass =
   "relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_24px_80px_rgba(5,6,10,0.65)] backdrop-blur-xl transition-[border-color,box-shadow] duration-300 hover:border-white/20 hover:shadow-[0_24px_80px_rgba(5,6,10,0.65),0_0_0_1px_rgba(255,255,255,0.06)]";
 
@@ -21,13 +19,9 @@ function JoinContent({ code }: JoinClientProps) {
   const router = useRouter();
   const { connected, serverUrl, joinRoom, error } = useRoom();
   const { loading: authLoading, user, username } = useAuth();
-  const [name, setName] = useState(() =>
-    typeof window !== "undefined" ? localStorage.getItem(DISPLAY_NAME_KEY) || "" : "",
-  );
   const [localError, setLocalError] = useState<string | null>(null);
 
   const roomCode = String(code ?? "").toUpperCase();
-  const displayName = name || username;
 
   if (authLoading) {
     return (
@@ -73,22 +67,19 @@ function JoinContent({ code }: JoinClientProps) {
             </p>
             <p className="mt-1 text-xs text-white/50">Socket: {serverUrl}</p>
           </div>
-          <input
-            value={displayName}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Your display name"
-            className="h-11 w-full rounded-xl border border-white/10 bg-black/40 px-4 text-white"
-          />
+          <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/80">
+            You will join as{" "}
+            <span className="font-semibold text-white">{username || "Player"}</span>. Update this on the Account page.
+          </div>
           <button
             type="button"
             disabled={!connected}
             onClick={async () => {
-              const cleaned = displayName.trim();
+              const cleaned = (username || "").trim();
               if (!cleaned) {
-                setLocalError("Please enter a name");
+                setLocalError("Set your display name on the Account page first.");
                 return;
               }
-              localStorage.setItem(DISPLAY_NAME_KEY, cleaned);
               const reconnectKey = `fundeck:reconnect:${roomCode}`;
               const token = localStorage.getItem(reconnectKey);
               const result = await joinRoom(roomCode, cleaned, token);

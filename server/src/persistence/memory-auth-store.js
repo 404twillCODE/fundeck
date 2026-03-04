@@ -27,12 +27,19 @@ class MemoryAuthStore {
     return crypto.randomBytes(32).toString("hex");
   }
 
-  createUser({ email, passwordHash }) {
+  createUser({ email, passwordHash, displayName }) {
     const normalizedEmail = MemoryAuthStore.normalizeEmail(email);
     if (this.users.has(normalizedEmail)) throw new Error("Email already registered");
     const userId = MemoryAuthStore.generateId();
     const createdAt = MemoryAuthStore.nowIso();
-    const user = { id: userId, email: normalizedEmail, password_hash: passwordHash, created_at: createdAt };
+    const safeDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : null;
+    const user = {
+      id: userId,
+      email: normalizedEmail,
+      password_hash: passwordHash,
+      created_at: createdAt,
+      display_name: safeDisplayName,
+    };
     this.users.set(normalizedEmail, user);
     this.ensureStats(userId, 1000);
     return this.findUserById(userId);
@@ -159,6 +166,7 @@ class MemoryAuthStore {
       rank: index + 1,
       userId: row.user_id,
       email: row.email,
+      displayName: row.display_name || null,
       gamesPlayed: row.games_played,
       blackjackWins: row.blackjack_wins,
       blackjackLosses: row.blackjack_losses,
@@ -196,11 +204,21 @@ class MemoryAuthStore {
       rank: index + 1,
       userId: row.user_id,
       email: row.email,
+      displayName: row.display_name || null,
       gamesPlayed: row.games_played,
       blackjackWins: row.blackjack_wins,
       blackjackLosses: row.blackjack_losses,
       chips: row.chips,
     };
+  }
+
+  updateDisplayName(userId, displayName) {
+    if (!userId) return null;
+    const safeDisplayName = typeof displayName === "string" && displayName.trim() ? displayName.trim() : null;
+    const user = this.findUserById(userId);
+    if (!user) return null;
+    user.display_name = safeDisplayName;
+    return user;
   }
 }
 
