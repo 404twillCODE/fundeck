@@ -18,7 +18,7 @@ type RoomClientProps = {
 function RoomLobby({ code }: RoomClientProps) {
   const router = useRouter();
   const { room, connected, serverUrl, error, joinRoom, setReady, sendChat, setGame, startGame, leaveRoom } = useRoom();
-  const { loading: authLoading, user, username } = useAuth();
+  const { username } = useAuth();
   const [chatInput, setChatInput] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
   const autoJoinAttemptedRef = useRef(false);
@@ -28,18 +28,12 @@ function RoomLobby({ code }: RoomClientProps) {
   const liveGames = useMemo(() => games.filter((game) => game.status === "live"), []);
 
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (!username) return;
     if (!connected || autoJoinAttemptedRef.current || room) return;
-
-    const activeName = username;
-    if (!activeName) {
-      router.replace(`/join/${roomCode}`);
-      return;
-    }
 
     autoJoinAttemptedRef.current = true;
 
-    joinRoom(roomCode, activeName, localToken).then((result) => {
+    joinRoom(roomCode, username, localToken).then((result) => {
       if (result.reconnectToken) {
         localStorage.setItem(`fundeck:reconnect:${roomCode}`, result.reconnectToken);
       }
@@ -47,32 +41,20 @@ function RoomLobby({ code }: RoomClientProps) {
         setJoinError(result.error);
       }
     });
-  }, [authLoading, connected, joinRoom, localToken, room, roomCode, router, user, username]);
+  }, [connected, joinRoom, localToken, room, roomCode, username]);
 
-  if (authLoading) {
-    return (
-      <main className="flex-1 py-16">
-        <Container>
-          <NeonCard className="space-y-3 p-6 text-white/70">
-            <p>Room {roomCode}: Loading account...</p>
-          </NeonCard>
-        </Container>
-      </main>
-    );
-  }
-
-  if (!user) {
+  if (!username) {
     return (
       <main className="flex-1 py-16">
         <Container>
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_24px_80px_rgba(5,6,10,0.65)] backdrop-blur-xl transition-[border-color] duration-300 hover:border-white/20 space-y-3 p-6 text-white/80">
             <h1 className="text-2xl font-semibold text-white">Room {roomCode}</h1>
-            <p className="text-white/60">Sign in with a local account before joining this room.</p>
+            <p className="text-white/60">You need a username before joining. Go to the join page to enter one.</p>
             <a
-              href={`/account?next=/room/${roomCode}`}
+              href={`/join/${roomCode}`}
               className="inline-flex rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80 transition-all duration-200 hover:border-cyan-400/50 hover:bg-white/10 hover:text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.15)]"
             >
-              Open Account
+              Go to Join Page
             </a>
           </div>
         </Container>
@@ -219,9 +201,8 @@ function RoomLobby({ code }: RoomClientProps) {
 }
 
 export default function RoomClient({ code }: RoomClientProps) {
-  const { sessionToken } = useAuth();
   return (
-    <RoomProvider authToken={sessionToken}>
+    <RoomProvider>
       <RoomLobby code={code} />
     </RoomProvider>
   );

@@ -266,23 +266,16 @@
       <!-- HOST DASHBOARD TAB -->
       <div class="tab-content" id="tab-host">
         <div class="panel">
-          <!-- Auth section (shown when not logged in) -->
-          <div id="host-auth" class="panel-section">
-            <h2>Sign In to Host</h2>
-            <p>Create or sign into a local account to manage games.</p>
-            <div class="flex-row" style="margin-bottom:0.5rem;">
-              <button type="button" class="btn btn-sm" id="auth-tab-signin" style="opacity:0.5">Sign In</button>
-              <button type="button" class="btn btn-sm" id="auth-tab-signup">Register</button>
-            </div>
-            <div class="form-row"><label class="input-label">Email</label><input type="email" id="auth-email" class="input" placeholder="you@example.com" /></div>
-            <div class="form-row" id="auth-name-row"><label class="input-label">Display Name</label><input type="text" id="auth-name" class="input" placeholder="Player name" /></div>
-            <div class="form-row"><label class="input-label">Password</label><input type="password" id="auth-password" class="input" placeholder="At least 8 characters" /></div>
-            <div id="auth-error" class="error-banner" hidden></div>
-            <button type="button" id="auth-submit" class="btn btn-primary" style="margin-top:0.5rem;">Create Account</button>
+          <!-- Username section -->
+          <div id="host-username-section" class="panel-section">
+            <h2>Your Username</h2>
+            <p>Enter your display name. This is how you appear to players.</p>
+            <div class="form-row"><label class="input-label">Display Name</label><input type="text" id="host-username-input" class="input" placeholder="Enter your name" maxlength="24" /></div>
+            <div id="host-username-error" class="error-banner" hidden></div>
+            <button type="button" id="host-username-save" class="btn btn-primary" style="margin-top:0.5rem;">Save Username</button>
           </div>
 
-          <!-- Host panel (shown when logged in) -->
-          <div id="host-panel" hidden>
+          <div id="host-panel">
             <div class="panel-section">
               <h2>Room Management</h2>
               <div id="host-no-room">
@@ -321,7 +314,7 @@
 
             <div class="panel-section">
               <div class="flex-row">
-                <button type="button" id="host-signout" class="btn btn-sm">Sign Out</button>
+                <button type="button" id="host-change-name" class="btn btn-sm">Change Username</button>
               </div>
             </div>
           </div>

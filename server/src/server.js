@@ -4,7 +4,6 @@ const path = require("path");
 const next = require("next");
 const { Server } = require("socket.io");
 const { v4: uuidv4 } = require("uuid");
-const bcrypt = require("bcryptjs");
 
 const {
   DEFAULT_GAME_ID,
@@ -19,8 +18,6 @@ const {
 } = require("./utils");
 const { MemoryStore } = require("./persistence/memory-store");
 const { SqliteStore } = require("./persistence/sqlite-store");
-const { AuthStore } = require("./persistence/auth-store");
-const { MemoryAuthStore } = require("./persistence/memory-auth-store");
 const { registerGame, getGame, getGames } = require("./games");
 const { registerBlackjack } = require("./games/blackjack");
 
@@ -35,9 +32,6 @@ const NEXT_APP_DIR = process.env.NEXT_APP_DIR
 
 const JOIN_LIMIT_WINDOW_MS = 60 * 1000;
 const JOIN_LIMIT_MAX = Number(process.env.JOIN_RATE_LIMIT_PER_IP || 20);
-const SESSION_COOKIE_NAME = "fundeck_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
-const PASSWORD_MIN_LENGTH = 8;
 
 const ENABLE_SQLITE_PERSISTENCE = String(process.env.ENABLE_SQLITE_PERSISTENCE || "false").toLowerCase() === "true";
 const SQLITE_DB_PATH = process.env.SQLITE_DB_PATH || path.resolve(process.cwd(), "game-server-data.sqlite");
@@ -45,8 +39,6 @@ const DEV_ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
   "http://127.0.0.1:3000",
 ]);
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function devLog(message, details) {
   if (!IS_DEV) return;
@@ -56,9 +48,6 @@ function devLog(message, details) {
   }
   console.log(`[game-server:dev] ${message}`, details);
 }
-
-const SQLITE_INSTALL_HINT =
-  "To enable persistent storage and saved accounts, install the optional dependency. From the project root run: cd server && npm install better-sqlite3";
 
 function createStore() {
   if (!ENABLE_SQLITE_PERSISTENCE) {
@@ -70,7 +59,6 @@ function createStore() {
     return { store, mode: `sqlite:${SQLITE_DB_PATH}`, sqliteAvailable: true };
   } catch (error) {
     console.error("[persistence] SQLite unavailable, falling back to memory:", error.message);
-    console.warn("[persistence]", SQLITE_INSTALL_HINT);
     return { store: new MemoryStore(), mode: "memory", sqliteAvailable: false };
   }
 }
@@ -79,12 +67,11 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function createPlayer(name, socket, reconnectToken, userId = null, balance = 1000) {
+function createPlayer(name, socket, reconnectToken, balance = 1000) {
   return {
     playerId: uuidv4(),
     name,
     reconnectToken,
-    userId,
     connected: true,
     ready: false,
     joinedAt: nowIso(),
@@ -96,76 +83,6 @@ function createPlayer(name, socket, reconnectToken, userId = null, balance = 100
     status: null,
     score: 0,
   };
-}
-
-function parseCookies(rawCookieHeader = "") {
-  return String(rawCookieHeader || "")
-    .split(";")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .reduce((acc, entry) => {
-      const equalsIndex = entry.indexOf("=");
-      if (equalsIndex === -1) return acc;
-      const key = entry.slice(0, equalsIndex).trim();
-      const value = entry.slice(equalsIndex + 1).trim();
-      if (!key) return acc;
-      acc[key] = decodeURIComponent(value);
-      return acc;
-    }, {});
-}
-
-function getSessionTokenFromCookieHeader(rawCookieHeader) {
-  const cookies = parseCookies(rawCookieHeader);
-  return cookies[SESSION_COOKIE_NAME] || null;
-}
-
-const USE_SECURE_COOKIES = process.env.SECURE_COOKIES === "true";
-
-function setSessionCookie(res, token, expiresAtIso) {
-  const expiresAt = Date.parse(expiresAtIso);
-  const maxAgeSeconds = Number.isFinite(expiresAt)
-    ? Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
-    : 0;
-
-  const segments = [
-    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${maxAgeSeconds}`,
-  ];
-
-  if (USE_SECURE_COOKIES) {
-    segments.push("Secure");
-  }
-
-  res.setHeader("Set-Cookie", segments.join("; "));
-}
-
-function clearSessionCookie(res) {
-  const segments = [
-    `${SESSION_COOKIE_NAME}=`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    "Max-Age=0",
-  ];
-
-  if (USE_SECURE_COOKIES) {
-    segments.push("Secure");
-  }
-
-  res.setHeader("Set-Cookie", segments.join("; "));
-}
-
-function defaultNameFromEmail(email) {
-  const value = String(email || "").trim().toLowerCase();
-  const localPart = value.split("@")[0] || "player";
-  return sanitizeName(localPart) || "player";
-}
-
-function sanitizeEmail(rawEmail) {
-  return String(rawEmail || "").trim().toLowerCase();
 }
 
 function parseInteger(value, fallback) {
@@ -198,44 +115,10 @@ function resolveUniquePlayerName(room, requestedName, excludePlayerId = null) {
   return sanitizeName(`${baseName}-${Math.floor(Math.random() * 900 + 100)}`) || "Player";
 }
 
-function publicUserFromRecord(userRecord) {
-  const defaultName = defaultNameFromEmail(userRecord.email);
-  const rawDisplayName = typeof userRecord.display_name === "string" ? userRecord.display_name : "";
-  const cleanedDisplayName = sanitizeName(rawDisplayName) || null;
-  return {
-    id: userRecord.id,
-    email: userRecord.email,
-    defaultName,
-    displayName: cleanedDisplayName || defaultName,
-    createdAt: userRecord.created_at,
-  };
-}
-
-function publicStatsFromRecord(statsRecord) {
-  return {
-    gamesPlayed: Number(statsRecord.games_played || 0),
-    blackjackWins: Number(statsRecord.blackjack_wins || 0),
-    blackjackLosses: Number(statsRecord.blackjack_losses || 0),
-    chips: Number(statsRecord.chips || 0),
-    updatedAt: statsRecord.updated_at || null,
-  };
-}
-
 async function bootstrap() {
   registerBlackjack(registerGame);
 
-  const { store, mode, sqliteAvailable: persistenceSqlite } = createStore();
-  let authStore;
-  let authSqliteAvailable = false;
-  try {
-    authStore = new AuthStore({ dbPath: SQLITE_DB_PATH });
-    authSqliteAvailable = true;
-  } catch (error) {
-    console.warn("[auth] SQLite unavailable (e.g. better-sqlite3 not built), using in-memory auth:", error.message);
-    console.warn("[auth]", SQLITE_INSTALL_HINT);
-    authStore = new MemoryAuthStore();
-  }
-  const sqliteAvailable = persistenceSqlite && authSqliteAvailable;
+  const { store, mode, sqliteAvailable } = createStore();
   const rooms = new Map();
   const joinAttempts = new Map();
 
@@ -273,146 +156,6 @@ async function bootstrap() {
 
   expressApp.use(express.json({ limit: "200kb" }));
 
-  function getSessionFromRequest(req) {
-    const sessionToken = getSessionTokenFromCookieHeader(req.headers.cookie);
-    if (!sessionToken) return null;
-    return authStore.getUserAndStatsBySessionToken(sessionToken);
-  }
-
-  expressApp.post("/api/auth/register", async (req, res) => {
-    try {
-      const email = sanitizeEmail(req.body?.email);
-      const password = String(req.body?.password || "");
-      const rawDisplayName = String(req.body?.displayName || "");
-
-      if (!EMAIL_REGEX.test(email)) {
-        res.status(400).json({ error: "Please provide a valid email address." });
-        return;
-      }
-      if (password.length < PASSWORD_MIN_LENGTH) {
-        res.status(400).json({ error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.` });
-        return;
-      }
-      if (authStore.findUserByEmail(email)) {
-        res.status(409).json({ error: "Account already exists for this email." });
-        return;
-      }
-
-      const passwordHash = await bcrypt.hash(password, 12);
-      const safeDisplayName = sanitizeName(rawDisplayName) || null;
-      const user = authStore.createUser({ email, passwordHash, displayName: safeDisplayName });
-      const expiresAtIso = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-      const session = authStore.createSession(user.id, expiresAtIso);
-      const stats = authStore.getStats(user.id);
-
-      setSessionCookie(res, session.token, session.expiresAt);
-      devLog("auth:register", { userId: user.id, email: user.email });
-      res.status(201).json({
-        user: publicUserFromRecord(user),
-        stats: publicStatsFromRecord(stats),
-        sessionToken: session.token,
-      });
-    } catch (error) {
-      console.error("register error:", error);
-      res.status(500).json({ error: "Failed to register account." });
-    }
-  });
-
-  expressApp.post("/api/auth/login", async (req, res) => {
-    try {
-      const email = sanitizeEmail(req.body?.email);
-      const password = String(req.body?.password || "");
-      const user = authStore.findUserByEmail(email);
-      if (!user) {
-        res.status(401).json({ error: "Invalid email or password." });
-        return;
-      }
-
-      const isValid = await bcrypt.compare(password, user.password_hash);
-      if (!isValid) {
-        res.status(401).json({ error: "Invalid email or password." });
-        return;
-      }
-
-      const expiresAtIso = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-      const session = authStore.createSession(user.id, expiresAtIso);
-      const stats = authStore.getStats(user.id);
-
-      setSessionCookie(res, session.token, session.expiresAt);
-      devLog("auth:login", { userId: user.id, email: user.email });
-      res.json({
-        user: publicUserFromRecord(user),
-        stats: publicStatsFromRecord(stats),
-        sessionToken: session.token,
-      });
-    } catch (error) {
-      console.error("login error:", error);
-      res.status(500).json({ error: "Failed to login." });
-    }
-  });
-
-  expressApp.post("/api/auth/logout", (req, res) => {
-    const token = getSessionTokenFromCookieHeader(req.headers.cookie);
-    if (token) {
-      authStore.deleteSessionByToken(token);
-    }
-    clearSessionCookie(res);
-    devLog("auth:logout");
-    res.json({ ok: true });
-  });
-
-  expressApp.get("/api/me", (req, res) => {
-    const sessionToken = getSessionTokenFromCookieHeader(req.headers.cookie);
-    const session = sessionToken ? authStore.getUserAndStatsBySessionToken(sessionToken) : null;
-    if (!session) {
-      res.status(401).json({ error: "Not authenticated." });
-      return;
-    }
-
-    res.json({
-      user: publicUserFromRecord(session.user),
-      stats: publicStatsFromRecord(session.stats),
-      sessionToken,
-    });
-  });
-
-  expressApp.post("/api/account/display-name", (req, res) => {
-    const sessionToken = getSessionTokenFromCookieHeader(req.headers.cookie);
-    const session = sessionToken ? authStore.getUserAndStatsBySessionToken(sessionToken) : null;
-    if (!session) {
-      res.status(401).json({ error: "Not authenticated." });
-      return;
-    }
-
-    const rawDisplayName = String(req.body?.displayName || "");
-    const cleaned = sanitizeName(rawDisplayName);
-    if (!cleaned) {
-      res.status(400).json({ error: "Display name cannot be empty." });
-      return;
-    }
-
-    const updatedUser = authStore.updateDisplayName(session.user.id, cleaned);
-    const stats = authStore.getStats(session.user.id);
-
-    res.json({
-      user: publicUserFromRecord(updatedUser || session.user),
-      stats: publicStatsFromRecord(stats),
-      sessionToken,
-    });
-  });
-
-  expressApp.get("/api/leaderboard/blackjack", (req, res) => {
-    const limit = parseInteger(req.query.limit, 25);
-    const leaderboard = authStore.getBlackjackLeaderboard(limit);
-    const session = getSessionFromRequest(req);
-    const yourRank = session ? authStore.getBlackjackRank(session.user.id) : null;
-
-    res.json({
-      leaderboard,
-      yourRank,
-    });
-  });
-
   expressApp.get("/health", (_req, res) => {
     res.json({
       status: "ok",
@@ -420,7 +163,6 @@ async function bootstrap() {
       rooms: rooms.size,
       games: getGames(),
       sqliteAvailable: !!sqliteAvailable,
-      ...(sqliteAvailable ? {} : { sqliteInstallHint: SQLITE_INSTALL_HINT }),
     });
   });
 
@@ -465,7 +207,6 @@ async function bootstrap() {
           playerId: p.playerId,
           name: p.name,
           connected: p.connected,
-          userId: p.userId,
           balance: p.balance,
           ready: p.ready,
           status: p.status,
@@ -508,8 +249,6 @@ async function bootstrap() {
     const playerIndex = room.players.findIndex((p) => p.playerId === playerId);
     if (playerIndex === -1) { res.status(404).json({ error: "Player not found" }); return; }
     const player = room.players[playerIndex];
-    if (!room.bannedUserIds) room.bannedUserIds = [];
-    if (player.userId) room.bannedUserIds.push(player.userId);
     if (player.socketId) {
       const targetSocket = io.sockets.sockets.get(player.socketId);
       if (targetSocket) {
@@ -544,9 +283,7 @@ async function bootstrap() {
 
   expressApp.post("/api/host/create-room", express.json(), (req, res) => {
     if (!requireLocalhost(req, res)) return;
-    const session = getSessionFromRequest(req);
-    if (!session) { res.status(401).json({ error: "Not authenticated. Sign in first." }); return; }
-    const { gameId, name } = req.body || {};
+    const { gameId } = req.body || {};
     const targetGameId = typeof gameId === "string" && getGame(gameId) ? gameId : DEFAULT_GAME_ID;
     const game = getGame(targetGameId);
     if (!game) { res.status(400).json({ error: "Unknown game" }); return; }
@@ -558,7 +295,6 @@ async function bootstrap() {
       hostPlayerId: null,
       players: [],
       chat: [],
-      bannedUserIds: [],
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -641,54 +377,13 @@ async function bootstrap() {
     return rooms.get(socket.data.roomCode) || null;
   };
 
-  const recordBlackjackRound = (room, results) => {
-    if (!Array.isArray(results) || results.length === 0) return;
-
-    results.forEach((result) => {
-      const player = room.players.find((entry) => entry.playerId === result.playerId);
-      if (!player || !player.userId) return;
-
-      const outcome = String(result.outcome || "");
-      const winsDelta = outcome === "win" || outcome === "blackjack" ? 1 : 0;
-      const lossesDelta = ["lose", "bust", "surrender"].includes(outcome) ? 1 : 0;
-
-      authStore.updateBlackjackStats({
-        userId: player.userId,
-        winsDelta,
-        lossesDelta,
-        gamesPlayedDelta: 1,
-        chips: player.balance,
-      });
-    });
-
-    devLog("blackjack:stats_updated", { roomCode: room.roomCode, results: results.length });
-  };
+  const recordBlackjackRound = () => {};
 
   const gameHelpers = {
     emitRoomState,
     persistRoom,
     recordBlackjackRound,
   };
-
-  io.use((socket, nextMiddleware) => {
-    let token = getSessionTokenFromCookieHeader(socket.handshake.headers.cookie || "");
-    if (!token && socket.handshake.auth?.token) {
-      token = socket.handshake.auth.token;
-    }
-    const session = token ? authStore.getUserAndStatsBySessionToken(token) : null;
-
-    if (session) {
-      socket.data.userId = session.user.id;
-      socket.data.userEmail = session.user.email;
-      socket.data.defaultName = defaultNameFromEmail(session.user.email);
-    } else {
-      socket.data.userId = null;
-      socket.data.userEmail = null;
-      socket.data.defaultName = null;
-    }
-
-    nextMiddleware();
-  });
 
   getGames().forEach(({ id }) => {
     const game = getGame(id);
@@ -771,24 +466,15 @@ async function bootstrap() {
 
   io.on("connection", (socket) => {
     const ip = getClientIp(socket);
-    devLog("socket:connected", { socketId: socket.id, ip, userId: socket.data.userId || null });
+    devLog("socket:connected", { socketId: socket.id, ip });
 
     socket.on("lobby:create_room", ({ gameId, name } = {}, callback) => {
       if (!isLocalIp(ip)) {
         callback?.({ error: "Only the host machine (localhost) can create rooms on this server." });
         return;
       }
-      if (!socket.data.userId) {
-        callback?.({ error: "Authentication required. Sign in from the Account page." });
-        return;
-      }
 
-      const authUser = authStore.findUserById(socket.data.userId);
-      if (!authUser) {
-        callback?.({ error: "Session expired. Please sign in again." });
-        return;
-      }
-
+      const requestedName = sanitizeName(name) || "Host";
       const targetGameId = typeof gameId === "string" && getGame(gameId) ? gameId : DEFAULT_GAME_ID;
       const game = getGame(targetGameId);
       if (!game) {
@@ -798,10 +484,7 @@ async function bootstrap() {
 
       const roomCode = generateRoomCode(rooms);
       const reconnectToken = uuidv4();
-      const stats = authStore.getStats(authUser.id);
-      const preferredName = typeof authUser.display_name === "string" ? authUser.display_name : "";
-      const requestedName = sanitizeName(preferredName) || defaultNameFromEmail(authUser.email);
-      const player = createPlayer(requestedName, socket, reconnectToken, authUser.id, Number(stats.chips || 1000));
+      const player = createPlayer(requestedName, socket, reconnectToken);
 
       const room = {
         roomCode,
@@ -831,16 +514,7 @@ async function bootstrap() {
     });
 
     socket.on("lobby:join_room", ({ roomCode, name, reconnectToken } = {}, callback) => {
-      if (!socket.data.userId) {
-        callback?.({ error: "Authentication required. Sign in from the Account page." });
-        return;
-      }
-
-      const authUser = authStore.findUserById(socket.data.userId);
-      if (!authUser) {
-        callback?.({ error: "Session expired. Please sign in again." });
-        return;
-      }
+      const requestedName = sanitizeName(name) || "Player";
 
       const normalizedCode = String(roomCode || "").toUpperCase();
       if (!isValidRoomCode(normalizedCode)) {
@@ -858,33 +532,17 @@ async function bootstrap() {
         return;
       }
 
-      if (Array.isArray(room.bannedUserIds) && room.bannedUserIds.includes(authUser.id)) {
-        callback?.({ error: "You have been banned from this room." });
-        return;
-      }
-
-      const preferredName =
-        sanitizeName(typeof authUser.display_name === "string" ? authUser.display_name : "") ||
-        defaultNameFromEmail(authUser.email);
-
-      let player = room.players.find((entry) => entry.userId && entry.userId === authUser.id) || null;
-      if (!player && reconnectToken) {
-        const reconnectPlayer = room.players.find((entry) => entry.reconnectToken === reconnectToken) || null;
-        if (reconnectPlayer && reconnectPlayer.userId && reconnectPlayer.userId !== authUser.id) {
-          callback?.({ error: "Reconnect token does not match this signed-in account." });
-          return;
-        }
-        player = reconnectPlayer;
+      let player = null;
+      if (reconnectToken) {
+        player = room.players.find((entry) => entry.reconnectToken === reconnectToken) || null;
       }
 
       if (!player) {
-        const stats = authStore.getStats(authUser.id);
-        const uniqueName = resolveUniquePlayerName(room, preferredName);
-        player = createPlayer(uniqueName, socket, uuidv4(), authUser.id, Number(stats.chips || 1000));
+        const uniqueName = resolveUniquePlayerName(room, requestedName);
+        player = createPlayer(uniqueName, socket, uuidv4());
         room.players.push(player);
       } else {
-        player.name = resolveUniquePlayerName(room, preferredName, player.playerId);
-        player.userId = authUser.id;
+        player.name = resolveUniquePlayerName(room, requestedName, player.playerId);
         player.connected = true;
         player.socketId = socket.id;
         player.lastSeenAt = Date.now();
@@ -907,8 +565,25 @@ async function bootstrap() {
     });
 
     socket.on("lobby:set_name", ({ name } = {}, callback) => {
-      // Player names are now locked to the account display name.
-      callback?.({ error: "Name is locked to your account. Update it on the Account page." });
+      const room = roomAccessor(socket);
+      if (!room) {
+        callback?.({ error: "Room not found" });
+        return;
+      }
+      const player = room.players.find((entry) => entry.playerId === socket.data.playerId);
+      if (!player) {
+        callback?.({ error: "Player not found" });
+        return;
+      }
+      const cleaned = sanitizeName(name);
+      if (!cleaned) {
+        callback?.({ error: "Name cannot be empty" });
+        return;
+      }
+      player.name = resolveUniquePlayerName(room, cleaned, player.playerId);
+      persistRoom(room);
+      emitRoomState(room.roomCode);
+      callback?.({ ok: true, name: player.name });
     });
 
     socket.on("lobby:player_ready", ({ ready } = {}, callback) => {

@@ -1,4 +1,4 @@
-/* ─── element refs ─── */
+/* --- element refs --- */
 const $ = (id) => document.getElementById(id);
 
 const statusPill = $("status-pill");
@@ -39,15 +39,14 @@ const GAMES = [
   { slug:"rapid-trivia", name:"Rapid Trivia", description:"Quick-fire trivia rounds for teams or solo flex.", category:"Social", status:"wip", icon:"&#128172;" },
 ];
 
-/* ─── state ─── */
+/* --- state --- */
 let currentTab = "tab-server";
-let authMode = "signup";
-let currentUser = null;
+let hostUsername = localStorage.getItem("fundeck:displayName") || "";
 let activeRoom = null;
 let selectedGameForRoom = "blackjack";
 let pollInterval = null;
 
-/* ─── helpers ─── */
+/* --- helpers --- */
 function setCopyFeedback(btn, label) {
   const orig = btn.textContent;
   btn.textContent = label;
@@ -59,17 +58,17 @@ async function api(method, path, body) {
   return window.hostDesktop.hostApi(method, path, body);
 }
 
-/* ─── tab switching ─── */
+/* --- tab switching --- */
 document.querySelectorAll(".sidebar-btn[data-tab]").forEach((btn) => {
   btn.addEventListener("click", () => switchToTab(btn.dataset.tab));
 });
 
-/* ─── titlebar ─── */
+/* --- titlebar --- */
 $("btn-minimize").addEventListener("click", () => window.hostDesktop.windowMinimize());
 $("btn-maximize").addEventListener("click", () => window.hostDesktop.windowMaximize());
 $("btn-close").addEventListener("click", () => window.hostDesktop.windowClose());
 
-/* ─── server tab ─── */
+/* --- server tab --- */
 function renderServerState(state) {
   const status = state?.status || "stopped";
   const isRunning = status === "running";
@@ -144,99 +143,69 @@ consoleInputEl.addEventListener("keydown", async (e) => {
 
 window.hostDesktop.onState((s) => renderServerState(s));
 
-/* ─── auth (host tab) ─── */
-const authTabSignin = $("auth-tab-signin");
-const authTabSignup = $("auth-tab-signup");
-const authNameRow = $("auth-name-row");
-const authSubmit = $("auth-submit");
-const authError = $("auth-error");
-const hostAuth = $("host-auth");
+/* --- username (host tab) --- */
+const hostUsernameInput = $("host-username-input");
+const hostUsernameError = $("host-username-error");
+const hostUsernameSave = $("host-username-save");
+const hostUsernameSection = $("host-username-section");
 const hostPanel = $("host-panel");
 
-function setAuthMode(mode) {
-  authMode = mode;
-  authTabSignin.style.opacity = mode === "signin" ? "1" : "0.5";
-  authTabSignup.style.opacity = mode === "signup" ? "1" : "0.5";
-  authNameRow.hidden = mode !== "signup";
-  authSubmit.textContent = mode === "signup" ? "Create Account" : "Sign In";
+function saveHostUsername(name) {
+  const trimmed = (name || "").trim().replace(/\s+/g, " ").slice(0, 24);
+  if (!trimmed) return false;
+  hostUsername = trimmed;
+  localStorage.setItem("fundeck:displayName", trimmed);
+  return true;
 }
 
-authTabSignin.addEventListener("click", () => setAuthMode("signin"));
-authTabSignup.addEventListener("click", () => setAuthMode("signup"));
-setAuthMode("signup");
-
-authSubmit.addEventListener("click", async () => {
-  const email = $("auth-email").value.trim();
-  const password = $("auth-password").value;
-  const name = $("auth-name").value.trim();
-  authError.hidden = true;
-
-  if (!email) { authError.textContent = "Email is required."; authError.hidden = false; return; }
-  if (password.length < 8) { authError.textContent = "Password must be at least 8 characters."; authError.hidden = false; return; }
-  if (authMode === "signup" && !name) { authError.textContent = "Display name is required."; authError.hidden = false; return; }
-
-  authSubmit.disabled = true;
-  authSubmit.textContent = "Working...";
-
-  const endpoint = authMode === "signup" ? "/api/auth/register" : "/api/auth/login";
-  const body =
-    authMode === "signup"
-      ? { email, password, displayName: name }
-      : { email, password };
-  const result = await api("POST", endpoint, body);
-
-  authSubmit.disabled = false;
-  setAuthMode(authMode);
-
-  if (result.error) {
-    authError.textContent = result.error;
-    authError.hidden = false;
+hostUsernameSave.addEventListener("click", () => {
+  const name = hostUsernameInput.value.trim();
+  hostUsernameError.hidden = true;
+  if (!name) {
+    hostUsernameError.textContent = "Username is required.";
+    hostUsernameError.hidden = false;
     return;
   }
-
-  currentUser = result.user || null;
-  if (name && currentUser) localStorage.setItem("fundeck:displayName", name);
+  saveHostUsername(name);
   showHostPanel();
 });
 
-$("host-signout").addEventListener("click", async () => {
-  await api("POST", "/api/auth/logout");
-  currentUser = null;
-  showAuthPanel();
+hostUsernameInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") hostUsernameSave.click();
 });
 
-function showAuthPanel() {
-  hostAuth.hidden = false;
+$("host-change-name").addEventListener("click", () => {
+  showUsernameSection();
+});
+
+function showUsernameSection() {
+  hostUsernameSection.hidden = false;
   hostPanel.hidden = true;
+  hostUsernameInput.value = hostUsername;
+  hostUsernameInput.focus();
   sidebarUser.hidden = true;
 }
 
 function showHostPanel() {
-  hostAuth.hidden = true;
+  hostUsernameSection.hidden = true;
   hostPanel.hidden = false;
-  if (currentUser) {
+  if (hostUsername) {
     sidebarUser.hidden = false;
-    sidebarUsername.textContent =
-      currentUser.displayName ||
-      localStorage.getItem("fundeck:displayName") ||
-      currentUser.defaultName ||
-      "Host";
-    sidebarEmail.textContent = currentUser.email || "";
+    sidebarUsername.textContent = hostUsername;
+    sidebarEmail.textContent = "Host";
   }
   refreshHostPanel();
 }
 
-async function checkAuth() {
-  const result = await api("GET", "/api/me");
-  if (result.user) {
-    currentUser = result.user;
+function checkUsername() {
+  if (hostUsername) {
     showHostPanel();
   } else {
-    showAuthPanel();
+    showUsernameSection();
   }
 }
 
-/* ─── host dashboard ─── */
+/* --- host dashboard --- */
 const hostNoRoom = $("host-no-room");
 const hostActiveRoom = $("host-active-room");
 const hostPlayersSection = $("host-players-section");
@@ -291,7 +260,7 @@ $("host-start-game").addEventListener("click", async () => {
 });
 
 async function refreshHostPanel() {
-  if (!currentUser) return;
+  if (!hostUsername) return;
   populateGameSelect();
   const result = await api("GET", "/api/host/rooms");
   const rooms = result?.rooms || [];
@@ -322,20 +291,14 @@ async function refreshHostPanel() {
 
   if (ext) {
     let trimmed = ext.trim();
-
-    // Ensure custom URL has a scheme so QR scanners treat it as a proper link.
     if (!/^https?:\/\//i.test(trimmed)) {
       trimmed = "https://" + trimmed.replace(/^\/+/, "");
     }
-
     if (/\/join\/[^/]+$/i.test(trimmed)) {
-      // Looks like a full join URL with a room code already; replace the code.
       joinUrl = trimmed.replace(/(\/join\/)[^/]*$/i, `$1${room.roomCode}`);
     } else if (/\/join\/?$/i.test(trimmed)) {
-      // Ends with /join or /join/ – just append the code.
       joinUrl = trimmed.replace(/\/$/, "") + "/" + room.roomCode;
     } else {
-      // Treat as base URL; append /join/{code}.
       joinUrl = trimmed.replace(/\/$/, "") + "/join/" + room.roomCode;
     }
   } else {
@@ -416,7 +379,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-/* ─── helpers ─── */
+/* --- helpers --- */
 function switchToTab(tabId) {
   currentTab = tabId;
   document.querySelectorAll(".sidebar-btn[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabId));
@@ -425,7 +388,7 @@ function switchToTab(tabId) {
   if (tabId === "tab-games") renderGames();
 }
 
-/* ─── games tab ─── */
+/* --- games tab --- */
 function renderGames() {
   const grid = $("games-grid");
   grid.innerHTML = "";
@@ -459,15 +422,14 @@ $("games-grid").addEventListener("click", async (e) => {
   if (!btn) return;
   selectedGameForRoom = btn.dataset.createGame;
 
-  if (!currentUser) {
+  if (!hostUsername) {
     switchToTab("tab-host");
     return;
   }
 
   btn.disabled = true;
   btn.textContent = "Creating…";
-  const name = localStorage.getItem("fundeck:displayName") || "Host";
-  const result = await api("POST", "/api/host/create-room", { gameId: selectedGameForRoom, name });
+  const result = await api("POST", "/api/host/create-room", { gameId: selectedGameForRoom, name: hostUsername });
   btn.disabled = false;
   btn.textContent = "Play";
 
@@ -476,11 +438,11 @@ $("games-grid").addEventListener("click", async (e) => {
   switchToTab("tab-host");
 });
 
-/* ─── room polling ─── */
+/* --- room polling --- */
 function startRoomPolling() {
   if (pollInterval) return;
   pollInterval = setInterval(async () => {
-    if (currentTab === "tab-host" && currentUser && activeRoom) {
+    if (currentTab === "tab-host" && hostUsername && activeRoom) {
       const result = await api("GET", "/api/host/rooms");
       const rooms = result?.rooms || [];
       const room = rooms.find((r) => r.roomCode === activeRoom?.roomCode) || rooms[0] || null;
@@ -497,7 +459,7 @@ function startRoomPolling() {
   }, 3000);
 }
 
-/* ─── setup flow ─── */
+/* --- setup flow --- */
 function showSetupView(message) {
   setupView.classList.add("active");
   mainView.classList.add("hidden");
@@ -534,7 +496,7 @@ window.hostDesktop.onSetupComplete(async (result) => {
   }
 });
 
-/* ─── init ─── */
+/* --- init --- */
 async function init() {
   const status = await window.hostDesktop.getSetupStatus();
   if (status.setupNeeded) { showSetupView(status.message); return; }
@@ -542,10 +504,10 @@ async function init() {
   renderServerState(await window.hostDesktop.getState());
   renderGames();
 
-  setTimeout(async () => {
-    await checkAuth();
+  setTimeout(() => {
+    checkUsername();
     startRoomPolling();
-  }, 1500);
+  }, 500);
 }
 
 init();

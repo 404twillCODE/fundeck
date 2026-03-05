@@ -18,39 +18,35 @@ type JoinClientProps = {
 function JoinContent({ code }: JoinClientProps) {
   const router = useRouter();
   const { connected, serverUrl, joinRoom, error } = useRoom();
-  const { loading: authLoading, user, username } = useAuth();
+  const { username, setUsername } = useAuth();
+  const [nameInput, setNameInput] = useState(username || "");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const roomCode = String(code ?? "").toUpperCase();
 
-  if (authLoading) {
-    return (
-      <main className="flex-1 py-16">
-        <Container className="max-w-2xl">
-          <div className={`${cardClass} p-8 text-white/70`}>Loading account...</div>
-        </Container>
-      </main>
-    );
-  }
+  const handleJoin = async () => {
+    const name = nameInput.trim();
+    if (!name) {
+      setLocalError("Please enter a username.");
+      return;
+    }
+    setUsername(name);
 
-  if (!user) {
-    return (
-      <main className="flex-1 py-16">
-        <Container className="max-w-2xl">
-          <div className={`${cardClass} space-y-3 p-8 text-white/80`}>
-            <h1 className="text-3xl font-semibold text-white">Join Room {roomCode}</h1>
-            <p className="text-white/60">Sign in with a local account before joining rooms.</p>
-            <a
-              href={`/account?next=/join/${roomCode}`}
-              className="inline-flex rounded-xl border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white/80 transition-all duration-200 hover:border-cyan-400/50 hover:bg-white/10 hover:text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.15)]"
-            >
-              Open Account
-            </a>
-          </div>
-        </Container>
-      </main>
-    );
-  }
+    const reconnectKey = `fundeck:reconnect:${roomCode}`;
+    const token = localStorage.getItem(reconnectKey);
+    const result = await joinRoom(roomCode, name, token);
+    if (result.error) {
+      if (result.error.includes("Reconnect token")) {
+        localStorage.removeItem(reconnectKey);
+      }
+      setLocalError(result.error);
+      return;
+    }
+    if (result.reconnectToken) {
+      localStorage.setItem(reconnectKey, result.reconnectToken);
+    }
+    router.push(`/room/${roomCode}`);
+  };
 
   return (
     <main className="flex-1 py-16">
@@ -67,34 +63,30 @@ function JoinContent({ code }: JoinClientProps) {
             </p>
             <p className="mt-1 text-xs text-white/50">Socket: {serverUrl}</p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/80">
-            You will join as{" "}
-            <span className="font-semibold text-white">{username || "Player"}</span>. Update this on the Account page.
+          <div>
+            <label className="block text-xs uppercase tracking-[0.25em] text-white/40">
+              Your Name
+            </label>
+            <input
+              type="text"
+              value={nameInput}
+              onChange={(e) => {
+                setNameInput(e.target.value);
+                setLocalError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && connected) handleJoin();
+              }}
+              className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white/80 outline-none transition focus:border-white/30"
+              placeholder="Enter your username"
+              maxLength={24}
+              autoFocus
+            />
           </div>
           <button
             type="button"
-            disabled={!connected}
-            onClick={async () => {
-              const cleaned = (username || "").trim();
-              if (!cleaned) {
-                setLocalError("Set your display name on the Account page first.");
-                return;
-              }
-              const reconnectKey = `fundeck:reconnect:${roomCode}`;
-              const token = localStorage.getItem(reconnectKey);
-              const result = await joinRoom(roomCode, cleaned, token);
-              if (result.error) {
-                if (result.error.includes("Reconnect token does not match this signed-in account.")) {
-                  localStorage.removeItem(reconnectKey);
-                }
-                setLocalError(result.error);
-                return;
-              }
-              if (result.reconnectToken) {
-                localStorage.setItem(reconnectKey, result.reconnectToken);
-              }
-              router.push(`/room/${roomCode}`);
-            }}
+            disabled={!connected || !nameInput.trim()}
+            onClick={handleJoin}
             className="rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-300 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] text-black transition-all duration-200 hover:shadow-[0_0_24px_rgba(34,211,238,0.35)] hover:brightness-110 active:scale-[0.97] disabled:opacity-50 disabled:hover:shadow-none disabled:hover:brightness-100"
           >
             Join Room
@@ -108,9 +100,8 @@ function JoinContent({ code }: JoinClientProps) {
 }
 
 export default function JoinClient({ code }: JoinClientProps) {
-  const { sessionToken } = useAuth();
   return (
-    <RoomProvider authToken={sessionToken}>
+    <RoomProvider>
       <JoinContent code={code} />
     </RoomProvider>
   );

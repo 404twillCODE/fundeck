@@ -528,12 +528,6 @@ app.whenReady().then(async () => {
     const url = `http://127.0.0.1:${port}${apiPath}`;
     return new Promise((resolve) => {
       const req = http.request(url, { method: method || "GET" }, (res) => {
-        const setCookieHeader = res.headers["set-cookie"];
-        if (setCookieHeader) {
-          const raw = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
-          const cookiePart = raw.split(";")[0];
-          if (cookiePart) state._sessionCookie = cookiePart;
-        }
         let data = "";
         res.on("data", (chunk) => { data += chunk; });
         res.on("end", () => {
@@ -543,7 +537,6 @@ app.whenReady().then(async () => {
       req.on("error", (err) => resolve({ error: err.message }));
       req.setTimeout(8000, () => { req.destroy(); resolve({ error: "Request timed out" }); });
       req.setHeader("Content-Type", "application/json");
-      if (state._sessionCookie) req.setHeader("Cookie", state._sessionCookie);
       if (body && method !== "GET") {
         req.write(JSON.stringify(body));
       }

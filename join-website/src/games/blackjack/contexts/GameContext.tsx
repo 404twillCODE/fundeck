@@ -104,7 +104,7 @@ export const GameProvider = ({
   initialName,
   initialReconnectToken,
 }: GameProviderProps) => {
-  const { user, username: authUsername } = useAuth();
+  const { username: authUsername } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -295,7 +295,6 @@ export const GameProvider = ({
 
   useEffect(() => {
     if (!socket || !connected || autoJoinRef.current) return;
-    if (!user) return;
     if (!initialRoomCode || !(initialName || username)) return;
 
     autoJoinRef.current = true;
@@ -314,7 +313,7 @@ export const GameProvider = ({
       }
       localStorage.setItem("fundeck:displayName", initialName || username);
     });
-  }, [socket, connected, initialRoomCode, initialName, initialReconnectToken, username, user]);
+  }, [socket, connected, initialRoomCode, initialName, initialReconnectToken, username]);
 
   const createRoom = useCallback(
     (usernameOverride: string | null = null) => {
@@ -322,12 +321,8 @@ export const GameProvider = ({
         setError("Not connected to server.");
         return;
       }
-      if (!user) {
-        setError("Sign in before creating a room.");
-        return;
-      }
 
-      const name = usernameOverride || username || authUsername || user.defaultName || "Player";
+      const name = usernameOverride || username || authUsername || "Player";
       setUsername(name);
 
       emitWithAck<{ roomCode?: string; playerId?: string; reconnectToken?: string; error?: string }>(socket, "lobby:create_room", {
@@ -345,7 +340,7 @@ export const GameProvider = ({
         }
       });
     },
-    [socket, username, authUsername, user],
+    [socket, username, authUsername],
   );
 
   const joinRoom = useCallback(
@@ -354,12 +349,8 @@ export const GameProvider = ({
         setError("Not connected to server.");
         return;
       }
-      if (!user) {
-        setError("Sign in before joining a room.");
-        return;
-      }
 
-      const name = usernameOverride || username || authUsername || user.defaultName;
+      const name = usernameOverride || username || authUsername;
       if (!name) {
         setError("Username is required.");
         return;
@@ -384,7 +375,7 @@ export const GameProvider = ({
         }
       });
     },
-    [socket, username, authUsername, user],
+    [socket, username, authUsername],
   );
 
   const startGame = useCallback(() => {
